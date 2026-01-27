@@ -4,6 +4,17 @@ import argparse
 import sys
 
 from . import __version__
+from . import config
+
+
+def add_name_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the --name argument to a parser."""
+    parser.add_argument(
+        "--name", "-n",
+        type=str,
+        default=config.DEFAULT_VM_NAME,
+        help=f"VM name (default: {config.DEFAULT_VM_NAME})"
+    )
 
 
 def main() -> int:
@@ -25,6 +36,7 @@ def main() -> int:
         "setup",
         help="Set up the Student VM (download Debian image, create disk)"
     )
+    add_name_argument(setup_parser)
     setup_parser.add_argument(
         "--force", "-f",
         action="store_true",
@@ -48,6 +60,7 @@ def main() -> int:
         "start",
         help="Start the Student VM"
     )
+    add_name_argument(start_parser)
     start_parser.add_argument(
         "--gui",
         action="store_true",
@@ -85,6 +98,7 @@ def main() -> int:
         "stop",
         help="Stop the Student VM"
     )
+    add_name_argument(stop_parser)
     stop_parser.add_argument(
         "--force", "-f",
         action="store_true",
@@ -98,16 +112,18 @@ def main() -> int:
     )
     
     # Status command
-    subparsers.add_parser(
+    status_parser = subparsers.add_parser(
         "status",
         help="Show the Student VM status"
     )
+    add_name_argument(status_parser)
     
     # Service command
     service_parser = subparsers.add_parser(
         "service",
         help="Manage Student VM system service"
     )
+    add_name_argument(service_parser)
     service_parser.add_argument(
         "action",
         choices=["install", "uninstall"],
@@ -119,6 +135,7 @@ def main() -> int:
         "ssh",
         help="SSH into the Student VM"
     )
+    add_name_argument(ssh_parser)
     ssh_parser.add_argument(
         "--port", "-p",
         type=int,
@@ -131,6 +148,7 @@ def main() -> int:
         "run",
         help="Auto-setup (if needed) and start VM with GUI (one-click mode)"
     )
+    add_name_argument(run_parser)
     run_parser.add_argument(
         "--force", "-f",
         action="store_true",
@@ -175,6 +193,7 @@ def main() -> int:
         "balloon",
         help="Start memory balloon controller for dynamic memory management"
     )
+    add_name_argument(balloon_parser)
     balloon_parser.add_argument(
         "--min-memory", "-min",
         type=int,
@@ -198,6 +217,50 @@ def main() -> int:
         help="Run in foreground instead of background"
     )
     
+    # Backup command
+    backup_parser = subparsers.add_parser(
+        "backup",
+        help="Backup VM to a portable archive"
+    )
+    add_name_argument(backup_parser)
+    backup_parser.add_argument(
+        "output",
+        type=str,
+        help="Output path for backup archive (e.g., my-vm-backup.tar.gz)"
+    )
+    backup_parser.add_argument(
+        "--no-compress",
+        action="store_true",
+        help="Don't compress the archive"
+    )
+    
+    # Restore command
+    restore_parser = subparsers.add_parser(
+        "restore",
+        help="Restore VM from a backup archive"
+    )
+    restore_parser.add_argument(
+        "backup",
+        type=str,
+        help="Path to backup archive"
+    )
+    restore_parser.add_argument(
+        "--name", "-n",
+        type=str,
+        help="Name for restored VM (default: original name from backup)"
+    )
+    restore_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Overwrite existing VM"
+    )
+    
+    # List command
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List all VMs"
+    )
+    
     args = parser.parse_args()
     
     if args.command is None:
@@ -207,6 +270,7 @@ def main() -> int:
     if args.command == "setup":
         from .setup import setup_vm
         success = setup_vm(
+            name=args.name,
             force=args.force,
             locale=args.locale,
             keyboard=args.keyboard,
@@ -218,6 +282,7 @@ def main() -> int:
         from pathlib import Path
         shared_dir = Path(args.shared_dir) if args.shared_dir else None
         success = start_vm(
+            name=args.name,
             gui=args.gui,
             console=args.console,
             shared_dir=shared_dir,
@@ -229,20 +294,20 @@ def main() -> int:
     
     elif args.command == "stop":
         from .stop import stop_vm
-        success = stop_vm(force=args.force, timeout=args.timeout)
+        success = stop_vm(name=args.name, force=args.force, timeout=args.timeout)
         return 0 if success else 1
     
     elif args.command == "status":
         from .status import status_vm
-        is_running = status_vm()
+        is_running = status_vm(name=args.name)
         return 0 if is_running else 1
     
     elif args.command == "service":
         from .service import install_service, uninstall_service
         if args.action == "install":
-            success = install_service()
+            success = install_service(name=args.name)
         else:
-            success = uninstall_service()
+            success = uninstall_service(name=args.name)
         return 0 if success else 1
     
     elif args.command == "ssh":
@@ -274,6 +339,7 @@ def main() -> int:
         from pathlib import Path
         shared_dir = Path(args.shared_dir) if args.shared_dir else None
         success = run_vm(
+            name=args.name,
             force_setup=args.force,
             shared_dir=shared_dir,
             port=args.port,
@@ -290,23 +356,22 @@ def main() -> int:
             is_balloon_running, get_balloon_pid_file
         )
         from .start import get_host_memory_mb
-        from . import config
         from pathlib import Path
         import os
         
-        qmp_socket = get_qmp_socket_path()
-        shared_dir = Path(args.shared_dir) if args.shared_dir else config.get_data_dir()
+        qmp_socket = config.get_monitor_socket(args.name)
+        shared_dir = Path(args.shared_dir) if args.shared_dir else config.get_data_dir(args.name)
         
         if not qmp_socket.exists():
-            print("Error: VM is not running (QMP socket not found)")
+            print(f"Error: VM '{args.name}' is not running (QMP socket not found)")
             print("Start the VM first with: student-machine start")
             return 1
         
         # Check if balloon is already running
-        running, existing_pid = is_balloon_running()
+        running, existing_pid = is_balloon_running(args.name)
         if running:
             print(f"Balloon controller is already running (PID: {existing_pid})")
-            print(f"  Log: ~/.vm/balloon.log")
+            print(f"  Log: {config.get_balloon_log_file(args.name)}")
             print()
             print(f"To stop: kill {existing_pid}")
             return 0
@@ -322,12 +387,12 @@ def main() -> int:
             pid = os.fork()
             if pid > 0:
                 # Parent process - write PID and exit
-                balloon_pid_file = get_balloon_pid_file()
+                balloon_pid_file = get_balloon_pid_file(args.name)
                 balloon_pid_file.write_text(str(pid))
                 print(f"Memory balloon controller started in background (PID: {pid})")
                 print(f"  Min memory: {args.min_memory}MB")
                 print(f"  Max memory: {max_memory}MB")
-                print(f"  Log: ~/.vm/balloon.log")
+                print(f"  Log: {config.get_balloon_log_file(args.name)}")
                 print()
                 print(f"To stop: kill {pid}")
                 return 0
@@ -335,7 +400,7 @@ def main() -> int:
                 # Child process - detach and run
                 os.setsid()
                 # Redirect stdout/stderr to log file
-                log_file = config.get_vm_dir() / "balloon.log"
+                log_file = config.get_balloon_log_file(args.name)
                 with open(log_file, "a") as log:
                     os.dup2(log.fileno(), 1)
                     os.dup2(log.fileno(), 2)
@@ -353,6 +418,7 @@ def main() -> int:
             shared_dir=shared_dir,
             min_memory_mb=args.min_memory,
             max_memory_mb=max_memory,
+            name=args.name,
         )
         
         try:
@@ -361,6 +427,48 @@ def main() -> int:
             if args.foreground:
                 print("\nStopping balloon controller...")
         
+        return 0
+    
+    elif args.command == "backup":
+        from .backup import backup_vm
+        from pathlib import Path
+        success = backup_vm(
+            output_path=Path(args.output),
+            name=args.name,
+            compress=not args.no_compress,
+        )
+        return 0 if success else 1
+    
+    elif args.command == "restore":
+        from .backup import restore_vm
+        from pathlib import Path
+        success = restore_vm(
+            backup_path=Path(args.backup),
+            name=args.name,
+            force=args.force,
+        )
+        return 0 if success else 1
+    
+    elif args.command == "list":
+        from .backup import list_vms
+        from . import utils
+        
+        vms = list_vms()
+        if not vms:
+            print("No VMs found.")
+            print()
+            print("Create a VM with: student-machine run")
+            return 0
+        
+        print("=== Available VMs ===")
+        print()
+        for vm_name in vms:
+            is_running, pid = utils.is_vm_running(vm_name)
+            status = f"running (PID: {pid})" if is_running else "stopped"
+            vm_image = config.get_image_path(vm_name)
+            size_mb = vm_image.stat().st_size / (1024 * 1024)
+            print(f"  {vm_name}: {status} ({size_mb:.1f} MB)")
+        print()
         return 0
     
     return 0

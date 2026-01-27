@@ -39,6 +39,7 @@ def get_host_available_memory_mb() -> int:
 
 
 def start_vm(
+    name: str = config.DEFAULT_VM_NAME,
     gui: bool = False,
     console: bool = False,
     shared_dir: Optional[Path] = None,
@@ -50,9 +51,10 @@ def start_vm(
     Start the Student VM.
     
     Args:
+        name: Name of the VM to start.
         gui: If True, show graphical display.
         console: If True, enable serial console.
-        shared_dir: Directory to share with VM (default: ~/.vm/data).
+        shared_dir: Directory to share with VM (default: ~/.vm/<name>/data).
         port: SSH port forwarding (default: 2222).
         memory: Memory allocation (default from config).
         cpus: Number of CPUs (default from config).
@@ -60,7 +62,7 @@ def start_vm(
     Returns:
         True if VM started successfully, False otherwise.
     """
-    print("=== Starting Student VM ===")
+    print(f"=== Starting VM: {name} ===")
     print()
     
     # Check if QEMU is installed
@@ -70,8 +72,8 @@ def start_vm(
         return False
     
     # Check if VM images exist
-    vm_image = config.get_image_path()
-    seed_image = config.get_seed_image_path()
+    vm_image = config.get_image_path(name)
+    seed_image = config.get_seed_image_path(name)
     
     if not vm_image.exists():
         print(f"Error: VM image not found: {vm_image}")
@@ -84,14 +86,14 @@ def start_vm(
         return False
     
     # Check if VM is already running
-    is_running, pid = utils.is_vm_running()
+    is_running, pid = utils.is_vm_running(name)
     if is_running:
         print(f"VM is already running (PID: {pid})")
         print("To stop it, run: student-machine stop")
         return True
     
     # Clean up stale PID file
-    pid_file = config.get_pid_file()
+    pid_file = config.get_pid_file(name)
     if pid_file.exists():
         pid_file.unlink()
     
@@ -105,12 +107,12 @@ def start_vm(
     
     # Set up shared directory
     if shared_dir is None:
-        shared_dir = config.get_data_dir()
+        shared_dir = config.get_data_dir(name)
     shared_dir.mkdir(parents=True, exist_ok=True)
     
     # Build QEMU command
     cmd = [qemu_binary]
-    cmd.extend(["-name", config.VM_NAME])
+    cmd.extend(["-name", name])
     
     # Acceleration
     cmd.extend(accel_opts)
@@ -174,7 +176,7 @@ def start_vm(
         cmd.extend(["-display", "none"])
     
     # Console
-    console_sock = config.get_console_socket()
+    console_sock = config.get_console_socket(name)
     if console:
         if system != "windows":
             cmd.extend(["-serial", f"unix:{console_sock},server,nowait"])
@@ -183,7 +185,7 @@ def start_vm(
             cmd.extend(["-serial", "stdio"])
     
     # QMP Monitor socket (for graceful shutdown)
-    monitor_sock = config.get_monitor_socket()
+    monitor_sock = config.get_monitor_socket(name)
     if system != "windows":
         cmd.extend(["-qmp", f"unix:{monitor_sock},server,nowait"])
     
@@ -207,7 +209,7 @@ def start_vm(
     cmd.extend(["-device", "virtio-balloon"])
     
     # Log file
-    log_file = config.get_log_file()
+    log_file = config.get_log_file(name)
     
     print(f"Starting QEMU with command:")
     print(f"  {' '.join(cmd[:5])}...")
@@ -242,7 +244,7 @@ def start_vm(
         time.sleep(2)
         
         # Check if it started
-        is_running, pid = utils.is_vm_running()
+        is_running, pid = utils.is_vm_running(name)
         if is_running:
             print(f"✓ VM started with PID: {pid}")
             print()

@@ -10,6 +10,8 @@ A cross-platform QEMU VM manager that provides a Debian Linux virtual machine wi
 - **Dynamic memory**: Memory hotplug automatically adds memory when VM needs it
 - **Shared folders**: Easily share files between host and VM
 - **SSH access**: Connect via SSH on port 2222
+- **Backup & Restore**: Portable VM archives for easy migration between machines
+- **Multiple VMs**: Run multiple named VMs simultaneously
 - **Pre-installed tools**: Python, Node.js, Docker, VS Code, and more
 
 ## Prerequisites
@@ -79,8 +81,30 @@ The first boot takes 5-10 minutes to install the desktop environment. Subsequent
 | `student-machine status` | Show VM status |
 | `student-machine ssh` | SSH into the VM |
 | `student-machine balloon` | Start memory controller (auto-started by `run`) |
+| `student-machine backup` | Create portable backup archive |
+| `student-machine restore` | Restore VM from backup archive |
+| `student-machine list` | List all available VMs |
 | `student-machine service install` | Install as system service |
 | `student-machine service uninstall` | Remove system service |
+
+### Global Options
+
+All commands support the `--name` option to work with multiple VMs:
+
+```bash
+# Default VM (backward compatible)
+student-machine run
+
+# Named VM (stored in ~/.vm/<name>/)
+student-machine run --name work-vm
+student-machine run --name school-vm
+
+# All commands support --name
+student-machine start --name work-vm --gui
+student-machine stop --name work-vm
+student-machine status --name work-vm
+student-machine backup --name work-vm /path/to/backup.tar.gz
+```
 
 ### Run Options
 
@@ -156,6 +180,60 @@ student-machine balloon --foreground
 3. If VM free memory < 30%, controller hotplugs more memory (up to max)
 4. If VM free memory > 50%, controller reclaims memory via balloon (down to initial)
 
+## Backup & Restore
+
+Create portable VM backups that can be restored on any machine with student-machine installed:
+
+### Create Backup
+
+```bash
+# Backup to file (VM must be stopped)
+student-machine backup /path/to/my-vm-backup.tar.gz
+
+# Backup named VM
+student-machine backup --name work-vm /backups/work-vm-backup.tar.gz
+```
+
+The backup archive contains:
+- VM disk image (qcow2)
+- Cloud-init configuration (seed.iso)
+- Shared data folder contents
+- VM metadata (name, architecture, creation date)
+
+### Restore Backup
+
+```bash
+# Restore on a new machine (downloads will happen automatically)
+student-machine restore /path/to/my-vm-backup.tar.gz
+
+# Restore as a different VM name
+student-machine restore --name restored-vm /path/to/backup.tar.gz
+
+# Force overwrite existing VM
+student-machine restore --force /path/to/backup.tar.gz
+```
+
+### List VMs
+
+```bash
+# List all available VMs
+student-machine list
+```
+
+### Migration Workflow
+
+```bash
+# On source machine
+student-machine stop
+student-machine backup /tmp/my-work-vm.tar.gz
+# Copy backup to USB/cloud/etc.
+
+# On target machine (after installing student-machine)
+student-machine restore /path/to/my-work-vm.tar.gz
+student-machine run
+# VM starts exactly as it was!
+```
+
 ## File Locations
 
 All VM files are stored in `~/.vm/`:
@@ -163,13 +241,32 @@ All VM files are stored in `~/.vm/`:
 | File | Description |
 |------|-------------|
 | `~/.vm/student-vm.qcow2` | VM disk image |
-| `~/.vm/debian-12-base.qcow2` | Base Debian cloud image |
+| `~/.vm/debian-12-base.qcow2` | Base Debian cloud image (shared by all VMs) |
 | `~/.vm/seed.iso` | Cloud-init configuration |
 | `~/.vm/data/` | Shared folder (mounted as `/mnt/shared` in VM) |
 | `~/.vm/student-vm.log` | QEMU log file |
 | `~/.vm/balloon.log` | Memory controller log |
 | `~/.vm/student-vm.pid` | VM PID file |
 | `~/.vm/balloon.pid` | Memory controller PID file |
+
+### Named VMs
+
+When using `--name`, files are stored in subdirectories:
+
+| File | Description |
+|------|-------------|
+| `~/.vm/<name>/vm.qcow2` | Named VM disk image |
+| `~/.vm/<name>/seed.iso` | VM's cloud-init configuration |
+| `~/.vm/<name>/data/` | VM's shared folder |
+| `~/.vm/<name>/vm.log` | VM's QEMU log |
+| `~/.vm/<name>/balloon.log` | VM's memory controller log |
+
+```bash
+# Example: "work-vm" files are in ~/.vm/work-vm/
+student-machine run --name work-vm
+ls ~/.vm/work-vm/
+# vm.qcow2  seed.iso  data/  vm.log  vm.pid  ...
+```
 
 ## Shared Folders
 

@@ -205,9 +205,9 @@ def create_cloud_init_iso(dest: Path, user_data: str, meta_data: str) -> bool:
         meta_data_file.unlink(missing_ok=True)
 
 
-def is_vm_running() -> tuple[bool, Optional[int]]:
+def is_vm_running(name: str = config.DEFAULT_VM_NAME) -> tuple[bool, Optional[int]]:
     """Check if the VM is running. Returns (is_running, pid)."""
-    pid_file = config.get_pid_file()
+    pid_file = config.get_pid_file(name)
     
     if not pid_file.exists():
         return False, None
@@ -268,9 +268,9 @@ def kill_process(pid: int, force: bool = False) -> bool:
             return False
 
 
-def send_qmp_command(command: dict) -> Optional[dict]:
+def send_qmp_command(command: dict, name: str = config.DEFAULT_VM_NAME) -> Optional[dict]:
     """Send a QMP command to the VM monitor socket."""
-    monitor_sock = config.get_monitor_socket()
+    monitor_sock = config.get_monitor_socket(name)
     
     if not monitor_sock.exists():
         return None
@@ -297,7 +297,7 @@ def send_qmp_command(command: dict) -> Optional[dict]:
         return None
 
 
-def graceful_shutdown() -> bool:
+def graceful_shutdown(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Try to gracefully shutdown the VM via QMP."""
-    response = send_qmp_command({"execute": "system_powerdown"})
+    response = send_qmp_command({"execute": "system_powerdown"}, name)
     return response is not None

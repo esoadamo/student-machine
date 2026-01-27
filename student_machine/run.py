@@ -9,6 +9,7 @@ from . import utils
 
 
 def run_vm(
+    name: str = config.DEFAULT_VM_NAME,
     force_setup: bool = False,
     shared_dir: Optional[Path] = None,
     port: int = 2222,
@@ -26,6 +27,7 @@ def run_vm(
     3. The VM will auto-login to XFCE desktop
     
     Args:
+        name: Name of the VM to run.
         force_setup: If True, force recreation of VM images.
         shared_dir: Directory to share with VM (default: ~/.vm/data).
         port: SSH port forwarding (default: 2222).
@@ -38,7 +40,7 @@ def run_vm(
         True if VM started successfully, False otherwise.
     """
     print("=" * 60)
-    print("Student Machine - One-Click Mode")
+    print(f"Student Machine - One-Click Mode: {name}")
     print("=" * 60)
     print()
     
@@ -49,12 +51,12 @@ def run_vm(
         return False
     
     # Check if VM is already running
-    is_running, pid = utils.is_vm_running()
+    is_running, pid = utils.is_vm_running(name)
     if is_running:
         if force_setup:
             print(f"VM is running (PID: {pid}). Stopping it for forced recreation...")
             from .stop import stop_vm
-            if not stop_vm(force=True):
+            if not stop_vm(name=name, force=True):
                 print("Error: Failed to stop the running VM")
                 return False
             print()
@@ -69,8 +71,8 @@ def run_vm(
             return True
     
     # Check if setup is needed
-    vm_image = config.get_image_path()
-    seed_image = config.get_seed_image_path()
+    vm_image = config.get_image_path(name)
+    seed_image = config.get_seed_image_path(name)
     
     needs_setup = force_setup or not vm_image.exists() or not seed_image.exists()
     
@@ -79,7 +81,7 @@ def run_vm(
         print()
         
         from .setup import setup_vm
-        if not setup_vm(force=force_setup, locale=locale, keyboard=keyboard):
+        if not setup_vm(name=name, force=force_setup, locale=locale, keyboard=keyboard):
             print("Error: Setup failed")
             return False
         print()
@@ -92,8 +94,13 @@ def run_vm(
     print("Starting VM with graphical display...")
     print()
     
+    # Set up shared directory
+    if shared_dir is None:
+        shared_dir = config.get_data_dir(name)
+    
     from .start import start_vm
     success = start_vm(
+        name=name,
         gui=True,  # Always GUI in run mode
         console=False,
         shared_dir=shared_dir,
@@ -130,13 +137,14 @@ def run_vm(
         target_memory_mb = config.VM_MEMORY_TARGET  # Default 2GB
         
         success = start_balloon_controller(
+            name=name,
             shared_dir=shared_dir,
             min_memory_mb=target_memory_mb,  # This is the target to reclaim to
             max_memory_mb=max_memory_mb,     # This is the ceiling
         )
         if success:
             print(f"Memory balloon controller started (target: {target_memory_mb}MB, max: {max_memory_mb}MB)")
-            print(f"  Log: ~/.vm/balloon.log")
+            print(f"  Log: {config.get_balloon_log_file(name)}")
             print()
     
     return success

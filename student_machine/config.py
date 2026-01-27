@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 import platform
 
-# VM Configuration
-VM_NAME = "student-vm"
+# Default VM Configuration
+DEFAULT_VM_NAME = "student-vm"
 IMAGE_SIZE = "20G"  # Disk size for Debian with XFCE desktop
 VM_MEMORY = "2048M"  # Initial memory allocation (can grow via hotplug)
 VM_MEMORY_TARGET = 2048  # Initial memory in MB (used as floor for balloon reclaim)
@@ -23,44 +23,62 @@ def get_vm_dir() -> Path:
     return Path.home() / ".vm"
 
 
-def get_image_path() -> Path:
+def get_vm_subdir(name: str = DEFAULT_VM_NAME) -> Path:
+    """Get the directory for a specific VM."""
+    if name == DEFAULT_VM_NAME:
+        # For backwards compatibility, default VM uses ~/.vm directly
+        return get_vm_dir()
+    return get_vm_dir() / name
+
+
+def get_image_path(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the main VM image path."""
-    return get_vm_dir() / f"{VM_NAME}.qcow2"
+    return get_vm_subdir(name) / f"{name}.qcow2"
 
 
 def get_base_image_path() -> Path:
-    """Get the base Debian image path."""
+    """Get the base Debian image path (shared across all VMs)."""
     return get_vm_dir() / "debian-12-base.qcow2"
 
 
-def get_seed_image_path() -> Path:
+def get_seed_image_path(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the cloud-init seed image path."""
-    return get_vm_dir() / "seed.iso"
+    return get_vm_subdir(name) / "seed.iso"
 
 
-def get_pid_file() -> Path:
+def get_pid_file(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the PID file path."""
-    return get_vm_dir() / f"{VM_NAME}.pid"
+    return get_vm_subdir(name) / f"{name}.pid"
 
 
-def get_monitor_socket() -> Path:
+def get_monitor_socket(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the QMP monitor socket path."""
-    return get_vm_dir() / f"{VM_NAME}-monitor.sock"
+    return get_vm_subdir(name) / f"{name}-monitor.sock"
 
 
-def get_console_socket() -> Path:
+def get_console_socket(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the serial console socket path."""
-    return get_vm_dir() / f"{VM_NAME}-console.sock"
+    return get_vm_subdir(name) / f"{name}-console.sock"
 
 
-def get_log_file() -> Path:
+def get_log_file(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the QEMU log file path."""
-    return get_vm_dir() / f"{VM_NAME}.log"
+    return get_vm_subdir(name) / f"{name}.log"
 
 
-def get_data_dir() -> Path:
+def get_balloon_log_file(name: str = DEFAULT_VM_NAME) -> Path:
+    """Get the balloon controller log file path."""
+    return get_vm_subdir(name) / "balloon.log"
+
+
+def get_balloon_pid_file(name: str = DEFAULT_VM_NAME) -> Path:
+    """Get the balloon controller PID file path."""
+    return get_vm_subdir(name) / "balloon.pid"
+
+
+def get_data_dir(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the data directory for shared folders."""
-    return get_vm_dir() / "data"
+    return get_vm_subdir(name) / "data"
 
 
 def get_system() -> str:

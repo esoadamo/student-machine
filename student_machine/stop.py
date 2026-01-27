@@ -7,27 +7,32 @@ from . import config
 from . import utils
 
 
-def stop_vm(force: bool = False, timeout: int = 30) -> bool:
+def stop_vm(
+    name: str = config.DEFAULT_VM_NAME,
+    force: bool = False,
+    timeout: int = 30,
+) -> bool:
     """
     Stop the Student VM.
     
     Args:
+        name: Name of the VM to stop.
         force: If True, force kill the VM without graceful shutdown.
         timeout: Seconds to wait for graceful shutdown before forcing.
     
     Returns:
         True if VM was stopped, False otherwise.
     """
-    print("=== Stopping Student VM ===")
+    print(f"=== Stopping VM: {name} ===")
     print()
     
     # Check if VM is running
-    is_running, pid = utils.is_vm_running()
+    is_running, pid = utils.is_vm_running(name)
     
     if not is_running:
         print("VM is not running.")
         # Clean up stale files
-        pid_file = config.get_pid_file()
+        pid_file = config.get_pid_file(name)
         if pid_file.exists():
             pid_file.unlink()
         return True
@@ -39,14 +44,14 @@ def stop_vm(force: bool = False, timeout: int = 30) -> bool:
     # Try graceful shutdown via QMP (not on Windows with no unix sockets easily)
     if not force and system != "windows":
         print("Attempting graceful shutdown...")
-        if utils.graceful_shutdown():
+        if utils.graceful_shutdown(name):
             # Wait for VM to shut down
             for i in range(timeout):
                 time.sleep(1)
-                is_running, _ = utils.is_vm_running()
+                is_running, _ = utils.is_vm_running(name)
                 if not is_running:
                     print("✓ VM stopped gracefully")
-                    cleanup_files()
+                    cleanup_files(name)
                     return True
                 if i % 5 == 4:
                     print(f"  Waiting... ({i + 1}/{timeout}s)")
@@ -57,21 +62,21 @@ def stop_vm(force: bool = False, timeout: int = 30) -> bool:
     print("Forcing VM shutdown...")
     if pid and utils.kill_process(pid, force=True):
         time.sleep(1)
-        is_running, _ = utils.is_vm_running()
+        is_running, _ = utils.is_vm_running(name)
         if not is_running:
             print("✓ VM stopped")
-            cleanup_files()
+            cleanup_files(name)
             return True
     
     print("Error: Failed to stop VM")
     return False
 
 
-def cleanup_files() -> None:
+def cleanup_files(name: str = config.DEFAULT_VM_NAME) -> None:
     """Clean up runtime files after VM stops."""
-    pid_file = config.get_pid_file()
-    monitor_sock = config.get_monitor_socket()
-    console_sock = config.get_console_socket()
+    pid_file = config.get_pid_file(name)
+    monitor_sock = config.get_monitor_socket(name)
+    console_sock = config.get_console_socket(name)
     
     for f in [pid_file, monitor_sock, console_sock]:
         if f.exists():

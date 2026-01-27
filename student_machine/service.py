@@ -10,7 +10,7 @@ from . import config
 
 # Systemd service template for Linux
 SYSTEMD_SERVICE_TEMPLATE = """[Unit]
-Description=Student VM QEMU Virtual Machine
+Description=Student VM QEMU Virtual Machine ({name})
 After=network.target
 
 [Service]
@@ -23,8 +23,8 @@ WorkingDirectory={home}
 PIDFile={pid_file}
 
 # Start/Stop commands
-ExecStart={python} -m student_machine start
-ExecStop={python} -m student_machine stop
+ExecStart={python} -m student_machine start --name {name}
+ExecStop={python} -m student_machine stop --name {name}
 
 # Restart policy
 Restart=on-failure
@@ -44,13 +44,15 @@ LAUNCHD_PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.student-machine.vm</string>
+    <string>com.student-machine.{name}</string>
     <key>ProgramArguments</key>
     <array>
         <string>{python}</string>
         <string>-m</string>
         <string>student_machine</string>
         <string>start</string>
+        <string>--name</string>
+        <string>{name}</string>
     </array>
     <key>RunAtLoad</key>
     <false/>
@@ -67,47 +69,53 @@ LAUNCHD_PLIST_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-def install_service() -> bool:
+def install_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     """
     Install the VM as a system service.
     
+    Args:
+        name: Name of the VM to install as service.
+    
     Returns:
         True if successful, False otherwise.
     """
     system = config.get_system()
     
     if system == "linux":
-        return install_systemd_service()
+        return install_systemd_service(name)
     elif system == "macos":
-        return install_launchd_service()
+        return install_launchd_service(name)
     elif system == "windows":
-        return install_windows_task()
+        return install_windows_task(name)
     else:
         print(f"Error: Unsupported system: {system}")
         return False
 
 
-def uninstall_service() -> bool:
+def uninstall_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     """
     Uninstall the VM system service.
     
+    Args:
+        name: Name of the VM service to uninstall.
+    
     Returns:
         True if successful, False otherwise.
     """
     system = config.get_system()
     
     if system == "linux":
-        return uninstall_systemd_service()
+        return uninstall_systemd_service(name)
     elif system == "macos":
-        return uninstall_launchd_service()
+        return uninstall_launchd_service(name)
     elif system == "windows":
-        return uninstall_windows_task()
+        return uninstall_windows_task(name)
     else:
         print(f"Error: Unsupported system: {system}")
         return False
 
 
-def install_systemd_service() -> bool:
+def install_systemd_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Install systemd service on Linux."""
     import subprocess
     
@@ -127,18 +135,21 @@ def install_systemd_service() -> bool:
         home_dir = Path.home()
     
     python_path = sys.executable
-    pid_file = config.get_pid_file()
+    pid_file = config.get_pid_file(name)
     
     service_content = SYSTEMD_SERVICE_TEMPLATE.format(
+        name=name,
         user=real_user,
         home=home_dir,
         python=python_path,
         pid_file=pid_file,
     )
     
-    service_file = Path("/etc/systemd/system/student-vm.service")
+    # Use VM name in service file name
+    service_name = f"student-vm-{name}" if name != config.DEFAULT_VM_NAME else "student-vm"
+    service_file = Path(f"/etc/systemd/system/{service_name}.service")
     
-    print("Installing systemd service for Student VM...")
+    print(f"Installing systemd service for VM: {name}...")
     print(f"  User: {real_user}")
     print(f"  Python: {python_path}")
     
@@ -150,18 +161,18 @@ def install_systemd_service() -> bool:
         subprocess.run(["systemctl", "daemon-reload"], check=True)
         
         print()
-        print("✓ Service installed: student-vm")
+        print(f"✓ Service installed: {service_name}")
         print()
         print("Usage:")
-        print("  sudo systemctl start student-vm     # Start VM")
-        print("  sudo systemctl stop student-vm      # Stop VM")
-        print("  sudo systemctl restart student-vm   # Restart VM")
-        print("  sudo systemctl status student-vm    # Check status")
-        print("  sudo systemctl enable student-vm    # Start on boot")
-        print("  sudo systemctl disable student-vm   # Disable start on boot")
+        print(f"  sudo systemctl start {service_name}     # Start VM")
+        print(f"  sudo systemctl stop {service_name}      # Stop VM")
+        print(f"  sudo systemctl restart {service_name}   # Restart VM")
+        print(f"  sudo systemctl status {service_name}    # Check status")
+        print(f"  sudo systemctl enable {service_name}    # Start on boot")
+        print(f"  sudo systemctl disable {service_name}   # Disable start on boot")
         print()
         print("View logs:")
-        print("  journalctl -u student-vm -f")
+        print(f"  journalctl -u {service_name} -f")
         
         return True
     except Exception as e:
@@ -169,7 +180,7 @@ def install_systemd_service() -> bool:
         return False
 
 
-def uninstall_systemd_service() -> bool:
+def uninstall_systemd_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Uninstall systemd service on Linux."""
     import subprocess
     
@@ -177,14 +188,15 @@ def uninstall_systemd_service() -> bool:
         print("Error: Please run as root (sudo student-machine service uninstall)")
         return False
     
-    service_file = Path("/etc/systemd/system/student-vm.service")
+    service_name = f"student-vm-{name}" if name != config.DEFAULT_VM_NAME else "student-vm"
+    service_file = Path(f"/etc/systemd/system/{service_name}.service")
     
-    print("Uninstalling systemd service for Student VM...")
+    print(f"Uninstalling systemd service for VM: {name}...")
     
     try:
         # Stop and disable if running
-        subprocess.run(["systemctl", "stop", "student-vm"], capture_output=True)
-        subprocess.run(["systemctl", "disable", "student-vm"], capture_output=True)
+        subprocess.run(["systemctl", "stop", service_name], capture_output=True)
+        subprocess.run(["systemctl", "disable", service_name], capture_output=True)
         
         if service_file.exists():
             service_file.unlink()
@@ -199,38 +211,40 @@ def uninstall_systemd_service() -> bool:
         return False
 
 
-def install_launchd_service() -> bool:
+def install_launchd_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Install launchd service on macOS."""
     python_path = sys.executable
     home_dir = Path.home()
-    log_file = config.get_log_file()
+    log_file = config.get_log_file(name)
     
     plist_content = LAUNCHD_PLIST_TEMPLATE.format(
+        name=name,
         python=python_path,
         home=home_dir,
         log_file=log_file,
     )
     
-    plist_file = home_dir / "Library/LaunchAgents/com.student-machine.vm.plist"
+    label = f"com.student-machine.{name}"
+    plist_file = home_dir / f"Library/LaunchAgents/{label}.plist"
     plist_file.parent.mkdir(parents=True, exist_ok=True)
     
-    print("Installing launchd service for Student VM...")
+    print(f"Installing launchd service for VM: {name}...")
     
     try:
         plist_file.write_text(plist_content)
         
         print()
-        print("✓ Service installed: com.student-machine.vm")
+        print(f"✓ Service installed: {label}")
         print()
         print("Usage:")
-        print("  launchctl load ~/Library/LaunchAgents/com.student-machine.vm.plist")
-        print("  launchctl start com.student-machine.vm")
-        print("  launchctl stop com.student-machine.vm")
-        print("  launchctl unload ~/Library/LaunchAgents/com.student-machine.vm.plist")
+        print(f"  launchctl load ~/{plist_file.relative_to(home_dir)}")
+        print(f"  launchctl start {label}")
+        print(f"  launchctl stop {label}")
+        print(f"  launchctl unload ~/{plist_file.relative_to(home_dir)}")
         print()
         print("Or simply use:")
-        print("  student-machine start")
-        print("  student-machine stop")
+        print(f"  student-machine start --name {name}")
+        print(f"  student-machine stop --name {name}")
         
         return True
     except Exception as e:
@@ -238,14 +252,15 @@ def install_launchd_service() -> bool:
         return False
 
 
-def uninstall_launchd_service() -> bool:
+def uninstall_launchd_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Uninstall launchd service on macOS."""
     import subprocess
     
     home_dir = Path.home()
-    plist_file = home_dir / "Library/LaunchAgents/com.student-machine.vm.plist"
+    label = f"com.student-machine.{name}"
+    plist_file = home_dir / f"Library/LaunchAgents/{label}.plist"
     
-    print("Uninstalling launchd service for Student VM...")
+    print(f"Uninstalling launchd service for VM: {name}...")
     
     try:
         # Unload if loaded
@@ -265,21 +280,21 @@ def uninstall_launchd_service() -> bool:
         return False
 
 
-def install_windows_task() -> bool:
+def install_windows_task(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Install scheduled task on Windows."""
     import subprocess
     
     python_path = sys.executable
-    task_name = "StudentVM"
+    task_name = f"StudentVM-{name}" if name != config.DEFAULT_VM_NAME else "StudentVM"
     
-    print("Installing Windows scheduled task for Student VM...")
+    print(f"Installing Windows scheduled task for VM: {name}...")
     
     # Create a batch script to start the VM
-    vm_dir = config.get_vm_dir()
+    vm_dir = config.get_vm_subdir(name)
     vm_dir.mkdir(parents=True, exist_ok=True)
     
     start_script = vm_dir / "start-vm.bat"
-    start_script.write_text(f'@echo off\n"{python_path}" -m student_machine start\n')
+    start_script.write_text(f'@echo off\n"{python_path}" -m student_machine start --name {name}\n')
     
     try:
         # Create scheduled task (manual trigger, not automatic)
@@ -309,8 +324,12 @@ def install_windows_task() -> bool:
         print(f"  schtasks /change /tn {task_name} /disable  # Disable auto-start")
         print()
         print("Or simply use:")
-        print("  student-machine start")
-        print("  student-machine stop")
+        if name != config.DEFAULT_VM_NAME:
+            print(f"  student-machine start --name {name}")
+            print(f"  student-machine stop --name {name}")
+        else:
+            print("  student-machine start")
+            print("  student-machine stop")
         
         return True
     except Exception as e:
@@ -318,13 +337,13 @@ def install_windows_task() -> bool:
         return False
 
 
-def uninstall_windows_task() -> bool:
+def uninstall_windows_task(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Uninstall scheduled task on Windows."""
     import subprocess
     
-    task_name = "StudentVM"
+    task_name = f"StudentVM-{name}" if name != config.DEFAULT_VM_NAME else "StudentVM"
     
-    print("Uninstalling Windows scheduled task for Student VM...")
+    print(f"Uninstalling Windows scheduled task for VM: {name}...")
     
     try:
         subprocess.run([
@@ -334,7 +353,7 @@ def uninstall_windows_task() -> bool:
         ], check=True)
         
         # Remove batch script
-        vm_dir = config.get_vm_dir()
+        vm_dir = config.get_vm_subdir(name)
         start_script = vm_dir / "start-vm.bat"
         if start_script.exists():
             start_script.unlink()

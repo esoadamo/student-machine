@@ -152,19 +152,19 @@ class QMPClient:
         return []
 
 
-def get_balloon_pid_file() -> Path:
+def get_balloon_pid_file(name: str = config.DEFAULT_VM_NAME) -> Path:
     """Get the balloon PID file path."""
-    return config.get_vm_dir() / "balloon.pid"
+    return config.get_balloon_pid_file(name)
 
 
-def get_balloon_lock_file() -> Path:
+def get_balloon_lock_file(name: str = config.DEFAULT_VM_NAME) -> Path:
     """Get the balloon lock file path."""
-    return config.get_vm_dir() / "balloon.lock"
+    return config.get_vm_subdir(name) / "balloon.lock"
 
 
-def is_balloon_running() -> Tuple[bool, Optional[int]]:
+def is_balloon_running(name: str = config.DEFAULT_VM_NAME) -> Tuple[bool, Optional[int]]:
     """Check if balloon controller is already running."""
-    pid_file = get_balloon_pid_file()
+    pid_file = get_balloon_pid_file(name)
     if not pid_file.exists():
         return False, None
     
@@ -183,10 +183,10 @@ def is_balloon_running() -> Tuple[bool, Optional[int]]:
         return False, None
 
 
-def is_vm_running() -> bool:
+def is_vm_running(name: str = config.DEFAULT_VM_NAME) -> bool:
     """Check if the VM is still running by checking QEMU PID."""
     from . import utils
-    running, _ = utils.is_vm_running()
+    running, _ = utils.is_vm_running(name)
     return running
 
 
@@ -216,6 +216,7 @@ class MemoryBalloonController:
         low_memory_threshold: float = 0.30,  # 30% free = low, release balloon
         high_memory_threshold: float = 0.50,  # 50% free = can reclaim some
         adjustment_step_mb: int = 256,
+        name: str = config.DEFAULT_VM_NAME,
     ):
         self.qmp_socket = qmp_socket
         self.shared_dir = shared_dir
@@ -225,6 +226,7 @@ class MemoryBalloonController:
         self.low_memory_threshold = low_memory_threshold
         self.high_memory_threshold = high_memory_threshold
         self.adjustment_step_mb = adjustment_step_mb
+        self.name = name
         
         self.status_file = shared_dir / ".vm-memory-status"
         self.qmp = QMPClient(qmp_socket)
@@ -385,7 +387,7 @@ class MemoryBalloonController:
             print("Failed to connect to QMP socket")
             return
         
-        print(f"Memory balloon controller started")
+        print(f"Memory balloon controller started for VM: {self.name}")
         print(f"  Target memory: {self.min_memory_mb}MB")
         print(f"  Max memory (ceiling): {self.max_memory_mb}MB")
         print(f"  Low threshold: {self.low_memory_threshold:.0%}")
@@ -411,7 +413,7 @@ class MemoryBalloonController:
                 vm_check_counter += 1
                 if vm_check_counter >= 3:
                     vm_check_counter = 0
-                    if not is_vm_running():
+                    if not is_vm_running(self.name):
                         print(f"[{time.strftime('%H:%M:%S')}] VM has stopped, exiting balloon controller")
                         break
                 
@@ -423,7 +425,7 @@ class MemoryBalloonController:
         finally:
             self.qmp.disconnect()
             # Clean up PID file
-            pid_file = get_balloon_pid_file()
+            pid_file = get_balloon_pid_file(self.name)
             if pid_file.exists():
                 try:
                     pid_file.unlink()
@@ -431,12 +433,13 @@ class MemoryBalloonController:
                     pass
 
 
-def get_qmp_socket_path() -> Path:
+def get_qmp_socket_path(name: str = config.DEFAULT_VM_NAME) -> Path:
     """Get the QMP socket path."""
-    return config.get_monitor_socket()
+    return config.get_monitor_socket(name)
 
 
 def start_balloon_controller(
+    name: str = config.DEFAULT_VM_NAME,
     shared_dir: Optional[Path] = None,
     min_memory_mb: int = 1024,
     max_memory_mb: int = 8192,
@@ -449,25 +452,25 @@ def start_balloon_controller(
     import os
     import sys
     
-    qmp_socket = get_qmp_socket_path()
+    qmp_socket = get_qmp_socket_path(name)
     if not qmp_socket.exists():
-        print("Cannot start balloon: VM is not running (QMP socket not found)")
+        print(f"Cannot start balloon: VM '{name}' is not running (QMP socket not found)")
         return False
     
     # Check if balloon is already running
-    running, pid = is_balloon_running()
+    running, pid = is_balloon_running(name)
     if running:
         print(f"Balloon controller already running (PID: {pid})")
         return True
     
     if shared_dir is None:
-        shared_dir = config.get_data_dir()
+        shared_dir = config.get_data_dir(name)
     
     # Fork to background
     pid = os.fork()
     if pid > 0:
         # Parent process - write PID and return
-        pid_file = get_balloon_pid_file()
+        pid_file = get_balloon_pid_file(name)
         pid_file.write_text(str(pid))
         return True
     else:
@@ -475,7 +478,7 @@ def start_balloon_controller(
         os.setsid()
         
         # Redirect stdout/stderr to log file
-        log_file = config.get_vm_dir() / "balloon.log"
+        log_file = config.get_balloon_log_file(name)
         with open(log_file, "a") as log:
             os.dup2(log.fileno(), 1)
             os.dup2(log.fileno(), 2)
@@ -485,6 +488,7 @@ def start_balloon_controller(
             shared_dir=shared_dir,
             min_memory_mb=min_memory_mb,
             max_memory_mb=max_memory_mb,
+            name=name,
         )
         
         try:
@@ -493,7 +497,7 @@ def start_balloon_controller(
             print(f"Balloon controller error: {e}")
         finally:
             # Clean up PID file on exit
-            pid_file = get_balloon_pid_file()
+            pid_file = get_balloon_pid_file(name)
             if pid_file.exists():
                 try:
                     pid_file.unlink()

@@ -10,6 +10,7 @@ from . import cloud_init
 
 
 def setup_vm(
+    name: str = config.DEFAULT_VM_NAME,
     force: bool = False,
     locale: str = "en_US.UTF-8",
     keyboard: str = "us",
@@ -20,6 +21,7 @@ def setup_vm(
     Downloads Debian cloud image and creates the VM disk with cloud-init.
     
     Args:
+        name: Name of the VM to create.
         force: If True, recreate the VM even if it exists.
         locale: System locale (e.g., 'en_US.UTF-8', 'cs_CZ.UTF-8').
         keyboard: Keyboard layout (e.g., 'us', 'cz').
@@ -28,7 +30,7 @@ def setup_vm(
         True if setup was successful, False otherwise.
     """
     print("=" * 60)
-    print("Student VM Setup")
+    print(f"Student VM Setup: {name}")
     print("=" * 60)
     print()
     
@@ -44,15 +46,15 @@ def setup_vm(
         return False
     
     # Create VM directory
-    vm_dir = config.get_vm_dir()
+    vm_dir = config.get_vm_subdir(name)
     vm_dir.mkdir(parents=True, exist_ok=True)
     print(f"VM directory: {vm_dir}")
     print()
     
     # Get paths
     base_image = config.get_base_image_path()
-    vm_image = config.get_image_path()
-    seed_image = config.get_seed_image_path()
+    vm_image = config.get_image_path(name)
+    seed_image = config.get_seed_image_path(name)
     arch = config.get_arch()
     
     # Download Debian cloud image
@@ -107,7 +109,7 @@ def setup_vm(
     print()
     
     # Create data directory for shared folders
-    data_dir = config.get_data_dir()
+    data_dir = config.get_data_dir(name)
     data_dir.mkdir(parents=True, exist_ok=True)
     print(f"Shared folder: {data_dir}")
     print()
@@ -121,10 +123,16 @@ def setup_vm(
     print(f"  Shared Dir:   {data_dir}")
     print()
     print("To start the VM, run:")
-    print("  student-machine start")
-    print()
-    print("Or with GUI:")
-    print("  student-machine start --gui")
+    if name != config.DEFAULT_VM_NAME:
+        print(f"  student-machine start --name {name}")
+        print()
+        print("Or with GUI:")
+        print(f"  student-machine start --name {name} --gui")
+    else:
+        print("  student-machine start")
+        print()
+        print("Or with GUI:")
+        print("  student-machine start --gui")
     print()
     
     return True
