@@ -30,6 +30,18 @@ def main() -> int:
         action="store_true",
         help="Force recreation of VM images"
     )
+    setup_parser.add_argument(
+        "--locale", "-l",
+        type=str,
+        default="en_US.UTF-8",
+        help="System locale (default: en_US.UTF-8, e.g., cs_CZ.UTF-8 for Czech)"
+    )
+    setup_parser.add_argument(
+        "--keyboard", "-k",
+        type=str,
+        default="us",
+        help="Keyboard layout (default: us, e.g., cz for Czech)"
+    )
     
     # Start command
     start_parser = subparsers.add_parser(
@@ -145,6 +157,18 @@ def main() -> int:
         type=int,
         help="Number of CPUs (default: 2)"
     )
+    run_parser.add_argument(
+        "--locale", "-l",
+        type=str,
+        default="en_US.UTF-8",
+        help="System locale (default: en_US.UTF-8, e.g., cs_CZ.UTF-8 for Czech)"
+    )
+    run_parser.add_argument(
+        "--keyboard", "-k",
+        type=str,
+        default="us",
+        help="Keyboard layout (default: us, e.g., cz for Czech)"
+    )
     
     args = parser.parse_args()
     
@@ -154,7 +178,11 @@ def main() -> int:
     
     if args.command == "setup":
         from .setup import setup_vm
-        success = setup_vm(force=args.force)
+        success = setup_vm(
+            force=args.force,
+            locale=args.locale,
+            keyboard=args.keyboard,
+        )
         return 0 if success else 1
     
     elif args.command == "start":
@@ -223,6 +251,8 @@ def main() -> int:
             port=args.port,
             memory=args.memory,
             cpus=args.cpus,
+            locale=args.locale,
+            keyboard=args.keyboard,
         )
         return 0 if success else 1
     

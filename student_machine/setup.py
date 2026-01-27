@@ -2,13 +2,18 @@
 
 import sys
 from pathlib import Path
+from typing import Optional
 
 from . import config
 from . import utils
 from . import cloud_init
 
 
-def setup_vm(force: bool = False) -> bool:
+def setup_vm(
+    force: bool = False,
+    locale: str = "en_US.UTF-8",
+    keyboard: str = "us",
+) -> bool:
     """
     Set up the Student VM.
     
@@ -16,6 +21,8 @@ def setup_vm(force: bool = False) -> bool:
     
     Args:
         force: If True, recreate the VM even if it exists.
+        locale: System locale (e.g., 'en_US.UTF-8', 'cs_CZ.UTF-8').
+        keyboard: Keyboard layout (e.g., 'us', 'cz').
     
     Returns:
         True if setup was successful, False otherwise.
@@ -84,13 +91,14 @@ def setup_vm(force: bool = False) -> bool:
     
     # Create cloud-init seed image
     print("=== Creating cloud-init seed image ===")
+    print(f"Locale: {locale}, Keyboard: {keyboard}")
     if seed_image.exists() and not force:
         print(f"Seed image already exists: {seed_image}")
     else:
         if seed_image.exists():
             seed_image.unlink()
         
-        user_data = cloud_init.get_user_data()
+        user_data = cloud_init.get_user_data(locale=locale, keyboard=keyboard)
         meta_data = cloud_init.get_meta_data()
         
         if not utils.create_cloud_init_iso(seed_image, user_data, meta_data):
@@ -134,10 +142,26 @@ def main() -> int:
         action="store_true",
         help="Force recreation of VM images"
     )
+    parser.add_argument(
+        "--locale", "-l",
+        type=str,
+        default="en_US.UTF-8",
+        help="System locale (default: en_US.UTF-8, e.g., cs_CZ.UTF-8 for Czech)"
+    )
+    parser.add_argument(
+        "--keyboard", "-k",
+        type=str,
+        default="us",
+        help="Keyboard layout (default: us, e.g., cz for Czech)"
+    )
     
     args = parser.parse_args()
     
-    success = setup_vm(force=args.force)
+    success = setup_vm(
+        force=args.force,
+        locale=args.locale,
+        keyboard=args.keyboard,
+    )
     return 0 if success else 1
 
 

@@ -1,13 +1,31 @@
 """Cloud-init configuration for Debian with XFCE desktop."""
 
 import time
+from typing import Optional
 
 
-def get_user_data() -> str:
-    """Generate cloud-init user-data for Debian with XFCE desktop."""
-    return """#cloud-config
+def get_user_data(locale: str = "en_US.UTF-8", keyboard: str = "us") -> str:
+    """
+    Generate cloud-init user-data for Debian with XFCE desktop.
+    
+    Args:
+        locale: System locale (e.g., 'en_US.UTF-8', 'cs_CZ.UTF-8')
+        keyboard: Keyboard layout (e.g., 'us', 'cz')
+    
+    Returns:
+        Cloud-init user-data configuration.
+    """
+    # Extract language code for keyboard variant detection
+    lang_code = locale.split("_")[0] if "_" in locale else locale.split(".")[0]
+    
+    return f"""#cloud-config
 hostname: student-vm
 fqdn: student-vm.local
+
+# Locale and keyboard configuration
+locale: {locale}
+keyboard:
+  layout: {keyboard}
 
 users:
   - name: student
@@ -31,9 +49,16 @@ packages:
   - wget
   - git
   - htop
+  - btop
   - nano
   - vim
   - openssh-server
+  - locales
+  
+  # Terminal multiplexers
+  - screen
+  - byobu
+  - tmux
   
   # XFCE Desktop Environment
   - xfce4
@@ -47,18 +72,32 @@ packages:
   - thunar
   - xfce4-terminal
   - mousepad
+  - thonny
+  - kate
   
   # Development tools
   - build-essential
   - python3
   - python3-pip
   - python3-venv
+  - python3-pytest
+  - python3-flake8
+  - pylint
   - nodejs
   - npm
+  
+  # Database
+  - sqlite3
+  
+  # HTTP tools
+  - httpie
   
   # Docker
   - docker.io
   - docker-compose
+  
+  # Flatpak
+  - flatpak
 
 # Grow root partition to use full disk
 growpart:
@@ -166,7 +205,7 @@ write_files:
       # Clear screen and show banner
       clear
       
-      show_banner() {
+      show_banner() {{
         clear
         echo ""
         echo "╔═══════════════════════════════════════════════════════════════╗"
@@ -189,7 +228,7 @@ write_files:
         echo "║                                                               ║"
         echo "╚═══════════════════════════════════════════════════════════════╝"
         echo ""
-      }
+      }}
       
       show_banner
       echo "Waiting for cloud-init to start..."
@@ -313,6 +352,38 @@ runcmd:
   
   # Create shared folder mount point
   - mkdir -p /mnt/shared
+  
+  # Generate locale
+  - sed -i 's/^# *{locale}/{locale}/' /etc/locale.gen || echo "{locale} UTF-8" >> /etc/locale.gen
+  - locale-gen
+  - update-locale LANG={locale}
+  
+  # Configure keyboard layout
+  - |
+    cat > /etc/default/keyboard << KBEOF
+    XKBMODEL="pc105"
+    XKBLAYOUT="{keyboard}"
+    XKBVARIANT=""
+    XKBOPTIONS=""
+    BACKSPACE="guess"
+    KBEOF
+  - setupcon --save || true
+  
+  # Install VS Code
+  - |
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/vscode stable main" > /etc/apt/sources.list.d/vscode.list
+    apt-get update
+    apt-get install -y code
+  
+  # Install VSCodium via Flatpak
+  - flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  - flatpak install -y flathub com.vscodium.codium
+  
+  # Install uv (Python package manager)
+  - curl -LsSf https://astral.sh/uv/install.sh | sh
+  - cp /root/.local/bin/uv /usr/local/bin/uv || true
+  - cp /root/.local/bin/uvx /usr/local/bin/uvx || true
   
   # Enable and configure services
   - systemctl daemon-reload

@@ -52,6 +52,9 @@ pip install student-machine
 # One-click mode: auto-setup and start with GUI + autologin
 student-machine run
 
+# With Czech locale and keyboard layout
+student-machine run --locale cs_CZ.UTF-8 --keyboard cz
+
 # Or step by step:
 # 1. Set up the VM (downloads Debian image, ~5-10 minutes first time)
 student-machine setup
@@ -94,6 +97,24 @@ Options:
   --port, -p PORT    SSH port forwarding (default: 2222)
   --memory, -m SIZE  Memory allocation (default: 2048M)
   --cpus, -c NUM     Number of CPUs (default: 2)
+  --locale, -l LOC   System locale (default: en_US.UTF-8)
+  --keyboard, -k KB  Keyboard layout (default: us)
+```
+
+#### Locale and Keyboard Examples
+
+```bash
+# Czech locale and keyboard
+student-machine run --locale cs_CZ.UTF-8 --keyboard cz
+
+# German locale and keyboard
+student-machine run --locale de_DE.UTF-8 --keyboard de
+
+# French locale and keyboard
+student-machine run --locale fr_FR.UTF-8 --keyboard fr
+
+# Polish locale and keyboard
+student-machine run --locale pl_PL.UTF-8 --keyboard pl
 ```
 
 ### Start Options
@@ -151,8 +172,18 @@ The first boot takes 5-10 minutes as cloud-init:
 
 1. Resizes the disk
 2. Installs XFCE desktop environment
-3. Installs development tools (Python, Node.js, Docker)
-4. Configures auto-login
+3. Configures locale and keyboard layout
+4. Installs development tools:
+   - Python 3, pip, venv
+   - Node.js, npm
+   - Docker, docker-compose
+   - VS Code (code editor)
+   - Thonny (Python IDE for beginners)
+   - uv (fast Python package manager)
+5. Installs terminal tools:
+   - btop (system monitor)
+   - tmux, screen, byobu (terminal multiplexers)
+6. Configures auto-login
 
 After the first boot completes, the VM will have a full graphical desktop.
 

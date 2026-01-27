@@ -14,6 +14,8 @@ def run_vm(
     port: int = 2222,
     memory: Optional[str] = None,
     cpus: Optional[int] = None,
+    locale: str = "en_US.UTF-8",
+    keyboard: str = "us",
 ) -> bool:
     """
     Auto-setup (if needed) and start the Student VM with GUI.
@@ -29,6 +31,8 @@ def run_vm(
         port: SSH port forwarding (default: 2222).
         memory: Memory allocation (default from config).
         cpus: Number of CPUs (default from config).
+        locale: System locale (e.g., 'en_US.UTF-8', 'cs_CZ.UTF-8').
+        keyboard: Keyboard layout (e.g., 'us', 'cz').
     
     Returns:
         True if VM started successfully, False otherwise.
@@ -75,7 +79,7 @@ def run_vm(
         print()
         
         from .setup import setup_vm
-        if not setup_vm(force=force_setup):
+        if not setup_vm(force=force_setup, locale=locale, keyboard=keyboard):
             print("Error: Setup failed")
             return False
         print()
@@ -151,6 +155,18 @@ def main() -> int:
         type=int,
         help=f"Number of CPUs (default: {config.VM_CPUS})"
     )
+    parser.add_argument(
+        "--locale", "-l",
+        type=str,
+        default="en_US.UTF-8",
+        help="System locale (default: en_US.UTF-8, e.g., cs_CZ.UTF-8 for Czech)"
+    )
+    parser.add_argument(
+        "--keyboard", "-k",
+        type=str,
+        default="us",
+        help="Keyboard layout (default: us, e.g., cz for Czech)"
+    )
     
     args = parser.parse_args()
     
@@ -160,6 +176,8 @@ def main() -> int:
         port=args.port,
         memory=args.memory,
         cpus=args.cpus,
+        locale=args.locale,
+        keyboard=args.keyboard,
     )
     return 0 if success else 1
 
