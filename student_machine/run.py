@@ -1,0 +1,160 @@
+"""VM Run - One-click auto-setup and start with GUI."""
+
+import sys
+from pathlib import Path
+from typing import Optional
+
+from . import config
+from . import utils
+
+
+def run_vm(
+    force_setup: bool = False,
+    shared_dir: Optional[Path] = None,
+    port: int = 2222,
+    memory: Optional[str] = None,
+    cpus: Optional[int] = None,
+) -> bool:
+    """
+    Auto-setup (if needed) and start the Student VM with GUI.
+    
+    This is the one-click mode for students - it will:
+    1. Check if setup is needed and run it automatically
+    2. Start the VM with graphical display
+    3. The VM will auto-login to LXQT desktop
+    
+    Args:
+        force_setup: If True, force recreation of VM images.
+        shared_dir: Directory to share with VM (default: ~/.vm/data).
+        port: SSH port forwarding (default: 2222).
+        memory: Memory allocation (default from config).
+        cpus: Number of CPUs (default from config).
+    
+    Returns:
+        True if VM started successfully, False otherwise.
+    """
+    print("=" * 60)
+    print("Student Machine - One-Click Mode")
+    print("=" * 60)
+    print()
+    
+    # Check if QEMU is installed
+    if not utils.check_qemu_installed():
+        print("Error: QEMU is not installed or not in PATH.")
+        print(utils.get_installation_instructions())
+        return False
+    
+    # Check if VM is already running
+    is_running, pid = utils.is_vm_running()
+    if is_running:
+        print(f"VM is already running (PID: {pid})")
+        print()
+        print("Access information:")
+        print(f"  SSH:      ssh student@localhost -p {port}")
+        print(f"  Password: student")
+        print()
+        print("To stop the VM: student-machine stop")
+        return True
+    
+    # Check if setup is needed
+    vm_image = config.get_image_path()
+    seed_image = config.get_seed_image_path()
+    
+    needs_setup = force_setup or not vm_image.exists() or not seed_image.exists()
+    
+    if needs_setup:
+        print("VM not configured. Running setup...")
+        print()
+        
+        from .setup import setup_vm
+        if not setup_vm(force=force_setup):
+            print("Error: Setup failed")
+            return False
+        print()
+    else:
+        print("VM already configured.")
+        print(f"  Image: {vm_image}")
+        print()
+    
+    # Start the VM with GUI
+    print("Starting VM with graphical display...")
+    print()
+    
+    from .start import start_vm
+    success = start_vm(
+        gui=True,  # Always GUI in run mode
+        console=False,
+        shared_dir=shared_dir,
+        port=port,
+        memory=memory,
+        cpus=cpus,
+    )
+    
+    if success:
+        print()
+        print("=" * 60)
+        print("VM is starting!")
+        print("=" * 60)
+        print()
+        print("The LXQT desktop will appear in the QEMU window.")
+        print("Auto-login is enabled - no password needed.")
+        print()
+        print("First boot takes 5-10 minutes to install packages.")
+        print("Subsequent boots are much faster.")
+        print()
+        print("Credentials (if needed):")
+        print("  Username: student")
+        print("  Password: student")
+        print()
+    
+    return success
+
+
+def main() -> int:
+    """Entry point for vm-run command."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Auto-setup and start the Student VM with GUI"
+    )
+    parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Force recreation of VM images"
+    )
+    parser.add_argument(
+        "--shared-dir",
+        type=Path,
+        help="Directory to share with VM (default: ~/.vm/data)"
+    )
+    parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=2222,
+        help="SSH port forwarding (default: 2222)"
+    )
+    parser.add_argument(
+        "--memory", "-m",
+        type=str,
+        help=f"Memory allocation (default: {config.VM_MEMORY})"
+    )
+    parser.add_argument(
+        "--cpus", "-c",
+        type=int,
+        help=f"Number of CPUs (default: {config.VM_CPUS})"
+    )
+    
+    args = parser.parse_args()
+    
+    success = run_vm(
+        force_setup=args.force,
+        shared_dir=args.shared_dir,
+        port=args.port,
+        memory=args.memory,
+        cpus=args.cpus,
+    )
+    return 0 if success else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

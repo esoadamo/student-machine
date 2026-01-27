@@ -114,6 +114,38 @@ def main() -> int:
         help="SSH port (default: 2222)"
     )
     
+    # Run command (auto-setup + auto-start with GUI)
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Auto-setup (if needed) and start VM with GUI (one-click mode)"
+    )
+    run_parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Force recreation of VM images"
+    )
+    run_parser.add_argument(
+        "--shared-dir",
+        type=str,
+        help="Directory to share with VM (default: ~/.vm/data)"
+    )
+    run_parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=2222,
+        help="SSH port forwarding (default: 2222)"
+    )
+    run_parser.add_argument(
+        "--memory", "-m",
+        type=str,
+        help="Memory allocation (default: 2048M)"
+    )
+    run_parser.add_argument(
+        "--cpus", "-c",
+        type=int,
+        help="Number of CPUs (default: 2)"
+    )
+    
     args = parser.parse_args()
     
     if args.command is None:
@@ -180,6 +212,19 @@ def main() -> int:
         except Exception as e:
             print(f"Error: {e}")
             return 1
+    
+    elif args.command == "run":
+        from .run import run_vm
+        from pathlib import Path
+        shared_dir = Path(args.shared_dir) if args.shared_dir else None
+        success = run_vm(
+            force_setup=args.force,
+            shared_dir=shared_dir,
+            port=args.port,
+            memory=args.memory,
+            cpus=args.cpus,
+        )
+        return 0 if success else 1
     
     return 0
 

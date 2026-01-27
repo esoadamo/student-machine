@@ -49,6 +49,10 @@ pip install student-machine
 ## Quick Start
 
 ```bash
+# One-click mode: auto-setup and start with GUI + autologin
+student-machine run
+
+# Or step by step:
 # 1. Set up the VM (downloads Debian image, ~5-10 minutes first time)
 student-machine setup
 
@@ -69,6 +73,7 @@ student-machine ssh
 
 | Command | Description |
 |---------|-------------|
+| `student-machine run` | **One-click mode**: auto-setup + start with GUI + autologin |
 | `student-machine setup` | Download Debian image and create VM disk |
 | `student-machine start` | Start the VM (headless) |
 | `student-machine start --gui` | Start the VM with graphical display |
@@ -77,6 +82,19 @@ student-machine ssh
 | `student-machine ssh` | SSH into the VM |
 | `student-machine service install` | Install as system service |
 | `student-machine service uninstall` | Remove system service |
+
+### Run Options (One-Click Mode)
+
+```bash
+student-machine run [OPTIONS]
+
+Options:
+  --force, -f        Force recreation of VM images
+  --shared-dir PATH  Directory to share with VM (default: ~/.vm/data)
+  --port, -p PORT    SSH port forwarding (default: 2222)
+  --memory, -m SIZE  Memory allocation (default: 2048M)
+  --cpus, -c NUM     Number of CPUs (default: 2)
+```
 
 ### Start Options
 
