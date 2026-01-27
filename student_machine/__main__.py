@@ -261,6 +261,17 @@ def main() -> int:
         help="List all VMs"
     )
     
+    # QEMU install command
+    qemu_install_parser = subparsers.add_parser(
+        "qemu-install",
+        help="Install QEMU and prerequisites for current OS"
+    )
+    qemu_install_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Only check prerequisites, don't install"
+    )
+    
     args = parser.parse_args()
     
     if args.command is None:
@@ -335,6 +346,12 @@ def main() -> int:
             return 1
     
     elif args.command == "run":
+        from .qemu_install import check_and_prompt_install
+        
+        # Check prerequisites before running
+        if not check_and_prompt_install():
+            return 1
+        
         from .run import run_vm
         from pathlib import Path
         shared_dir = Path(args.shared_dir) if args.shared_dir else None
@@ -470,6 +487,19 @@ def main() -> int:
             print(f"  {vm_name}: {status} ({size_mb:.1f} MB)")
         print()
         return 0
+    
+    elif args.command == "qemu-install":
+        from .qemu_install import check_prerequisites, print_status, install_qemu
+        
+        status = check_prerequisites()
+        
+        if args.check:
+            print()
+            print_status(status)
+            return 0 if status["all_ok"] else 1
+        else:
+            success = install_qemu()
+            return 0 if success else 1
     
     return 0
 

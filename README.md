@@ -16,7 +16,21 @@ A cross-platform QEMU VM manager that provides a Debian Linux virtual machine wi
 
 ## Prerequisites
 
-### Linux (Ubuntu/Debian)
+QEMU is automatically checked when running `student-machine run`. If missing, you'll be prompted to install it.
+
+### Automatic Installation
+
+```bash
+# Install QEMU and all prerequisites
+student-machine qemu-install
+
+# Just check if everything is installed
+student-machine qemu-install --check
+```
+
+### Manual Installation
+
+#### Linux (Ubuntu/Debian)
 
 ```bash
 sudo apt install qemu-system-x86 qemu-utils cloud-image-utils
@@ -84,6 +98,7 @@ The first boot takes 5-10 minutes to install the desktop environment. Subsequent
 | `student-machine backup` | Create portable backup archive |
 | `student-machine restore` | Restore VM from backup archive |
 | `student-machine list` | List all available VMs |
+| `student-machine qemu-install` | Install QEMU and prerequisites |
 | `student-machine service install` | Install as system service |
 | `student-machine service uninstall` | Remove system service |
 
