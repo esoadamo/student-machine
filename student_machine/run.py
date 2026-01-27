@@ -118,6 +118,26 @@ def run_vm(
         print("  Username: student")
         print("  Password: student")
         print()
+        
+        # Start memory balloon controller
+        from .balloon import start_balloon_controller, is_balloon_running
+        from .start import get_host_memory_mb
+        
+        # Target memory = 2GB (or what was requested)
+        # Max memory for balloon = host total - 1GB
+        host_total_mb = get_host_memory_mb()
+        max_memory_mb = host_total_mb - 1024
+        target_memory_mb = config.VM_MEMORY_TARGET  # Default 2GB
+        
+        success = start_balloon_controller(
+            shared_dir=shared_dir,
+            min_memory_mb=target_memory_mb,  # This is the target to reclaim to
+            max_memory_mb=max_memory_mb,     # This is the ceiling
+        )
+        if success:
+            print(f"Memory balloon controller started (target: {target_memory_mb}MB, max: {max_memory_mb}MB)")
+            print(f"  Log: ~/.vm/balloon.log")
+            print()
     
     return success
 

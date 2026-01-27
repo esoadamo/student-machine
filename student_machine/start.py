@@ -4,10 +4,38 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from . import config
 from . import utils
+
+
+def get_host_memory_mb() -> int:
+    """Get total host memory in MB."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    # Value is in kB
+                    kb = int(line.split()[1])
+                    return kb // 1024
+    except:
+        pass
+    # Default fallback
+    return 8192
+
+
+def get_host_available_memory_mb() -> int:
+    """Get available host memory in MB."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    kb = int(line.split()[1])
+                    return kb // 1024
+    except:
+        pass
+    return 4096
 
 
 def start_vm(
@@ -95,7 +123,23 @@ def start_vm(
     
     # Resources
     cmd.extend(["-smp", f"cpus={vm_cpus}"])
-    cmd.extend(["-m", vm_memory])
+    
+    # Memory configuration for hotplug support
+    # Parse requested memory value (e.g., "2048M" -> 2048)
+    initial_memory = int(''.join(filter(str.isdigit, vm_memory)))
+    
+    # Max memory = host total - 1GB (reserve for host)
+    host_total = get_host_memory_mb()
+    max_memory = host_total - 1024
+    
+    print(f"Memory config: initial={initial_memory}MB, maxmem={max_memory}MB")
+    print(f"  Host: {host_total}MB total")
+    print(f"  Memory hotplug can add up to {max_memory}MB")
+    
+    # Memory with slots for hotplug - use simple format
+    # The maxmem must be greater than initial memory for slots to work
+    # Use 16 slots for more flexibility in hotplugging
+    cmd.extend(["-m", f"{initial_memory}M,slots=16,maxmem={max_memory}M"])
     
     # Drives
     cmd.extend([

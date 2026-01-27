@@ -170,6 +170,34 @@ def main() -> int:
         help="Keyboard layout (default: us, e.g., cz for Czech)"
     )
     
+    # Balloon command (memory management)
+    balloon_parser = subparsers.add_parser(
+        "balloon",
+        help="Start memory balloon controller for dynamic memory management"
+    )
+    balloon_parser.add_argument(
+        "--min-memory", "-min",
+        type=int,
+        default=1024,
+        help="Minimum VM memory in MB (default: 1024)"
+    )
+    balloon_parser.add_argument(
+        "--max-memory", "-max",
+        type=int,
+        default=0,
+        help="Maximum VM memory in MB (default: host RAM - 1GB)"
+    )
+    balloon_parser.add_argument(
+        "--shared-dir",
+        type=str,
+        help="Directory shared with VM (default: ~/.vm/data)"
+    )
+    balloon_parser.add_argument(
+        "--foreground", "-fg",
+        action="store_true",
+        help="Run in foreground instead of background"
+    )
+    
     args = parser.parse_args()
     
     if args.command is None:
@@ -255,6 +283,85 @@ def main() -> int:
             keyboard=args.keyboard,
         )
         return 0 if success else 1
+    
+    elif args.command == "balloon":
+        from .balloon import (
+            MemoryBalloonController, get_qmp_socket_path, 
+            is_balloon_running, get_balloon_pid_file
+        )
+        from .start import get_host_memory_mb
+        from . import config
+        from pathlib import Path
+        import os
+        
+        qmp_socket = get_qmp_socket_path()
+        shared_dir = Path(args.shared_dir) if args.shared_dir else config.get_data_dir()
+        
+        if not qmp_socket.exists():
+            print("Error: VM is not running (QMP socket not found)")
+            print("Start the VM first with: student-machine start")
+            return 1
+        
+        # Check if balloon is already running
+        running, existing_pid = is_balloon_running()
+        if running:
+            print(f"Balloon controller is already running (PID: {existing_pid})")
+            print(f"  Log: ~/.vm/balloon.log")
+            print()
+            print(f"To stop: kill {existing_pid}")
+            return 0
+        
+        # Use host memory - 1GB as default max
+        max_memory = args.max_memory
+        if max_memory == 0:  # Use default
+            max_memory = get_host_memory_mb() - 1024
+        
+        # Run in background unless --foreground is specified
+        if not args.foreground:
+            # Fork to background
+            pid = os.fork()
+            if pid > 0:
+                # Parent process - write PID and exit
+                balloon_pid_file = get_balloon_pid_file()
+                balloon_pid_file.write_text(str(pid))
+                print(f"Memory balloon controller started in background (PID: {pid})")
+                print(f"  Min memory: {args.min_memory}MB")
+                print(f"  Max memory: {max_memory}MB")
+                print(f"  Log: ~/.vm/balloon.log")
+                print()
+                print(f"To stop: kill {pid}")
+                return 0
+            else:
+                # Child process - detach and run
+                os.setsid()
+                # Redirect stdout/stderr to log file
+                log_file = config.get_vm_dir() / "balloon.log"
+                with open(log_file, "a") as log:
+                    os.dup2(log.fileno(), 1)
+                    os.dup2(log.fileno(), 2)
+        else:
+            print("Starting memory balloon controller (foreground)...")
+            print(f"  Min memory: {args.min_memory}MB")
+            print(f"  Max memory: {max_memory}MB")
+            print(f"  Shared dir: {shared_dir}")
+            print()
+            print("Press Ctrl+C to stop")
+            print()
+        
+        controller = MemoryBalloonController(
+            qmp_socket=qmp_socket,
+            shared_dir=shared_dir,
+            min_memory_mb=args.min_memory,
+            max_memory_mb=max_memory,
+        )
+        
+        try:
+            controller._run_loop()
+        except KeyboardInterrupt:
+            if args.foreground:
+                print("\nStopping balloon controller...")
+        
+        return 0
     
     return 0
 

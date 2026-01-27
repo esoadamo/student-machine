@@ -7,7 +7,8 @@ import platform
 # VM Configuration
 VM_NAME = "student-vm"
 IMAGE_SIZE = "20G"  # Larger size for Debian with XFCE desktop
-VM_MEMORY = "2048M"  # More memory for desktop environment
+VM_MEMORY = "2048M"  # Target memory (balloon will manage actual allocation)
+VM_MEMORY_TARGET = 2048  # Target memory in MB for balloon to maintain
 VM_CPUS = 2
 
 # Debian 12 cloud image URLs based on architecture

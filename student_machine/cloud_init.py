@@ -194,6 +194,141 @@ write_files:
       WantedBy=multi-user.target
     permissions: '0644'
 
+  # Memory monitor script - reports memory status to shared folder for balloon controller
+  - path: /usr/local/bin/memory-monitor.py
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env python3
+      \"\"\"Memory monitor for dynamic balloon control.\"\"\"
+      import json
+      import time
+      from pathlib import Path
+      
+      SHARED_DIR = Path("/mnt/shared")
+      STATUS_FILE = SHARED_DIR / ".vm-memory-status"
+      INTERVAL = 3  # seconds
+      
+      def get_memory_info():
+          \"\"\"Read memory info from /proc/meminfo.\"\"\"
+          info = {{}}
+          try:
+              with open("/proc/meminfo") as f:
+                  for line in f:
+                      parts = line.split()
+                      if len(parts) >= 2:
+                          key = parts[0].rstrip(":")
+                          value = int(parts[1])  # in kB
+                          info[key] = value
+          except Exception:
+              pass
+          return info
+      
+      def main():
+          print("Memory monitor started")
+          seq_id = 0  # Sequence ID to prevent duplicate processing
+          while True:
+              try:
+                  if not SHARED_DIR.exists():
+                      time.sleep(INTERVAL)
+                      continue
+                  
+                  mem = get_memory_info()
+                  total_kb = mem.get("MemTotal", 0)
+                  available_kb = mem.get("MemAvailable", 0)
+                  free_kb = mem.get("MemFree", 0)
+                  buffers_kb = mem.get("Buffers", 0)
+                  cached_kb = mem.get("Cached", 0)
+                  
+                  seq_id += 1
+                  status = {{
+                      "seq_id": seq_id,
+                      "timestamp": time.time(),
+                      "total_mb": total_kb // 1024,
+                      "available_mb": available_kb // 1024,
+                      "free_mb": free_kb // 1024,
+                      "buffers_mb": buffers_kb // 1024,
+                      "cached_mb": cached_kb // 1024,
+                      "used_mb": (total_kb - available_kb) // 1024,
+                  }}
+                  
+                  STATUS_FILE.write_text(json.dumps(status))
+              except Exception as e:
+                  print(f"Error: {{e}}")
+              
+              time.sleep(INTERVAL)
+      
+      if __name__ == "__main__":
+          main()
+
+  # Memory monitor systemd service
+  - path: /etc/systemd/system/memory-monitor.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Memory Monitor for Balloon Controller
+      After=mnt-shared.mount
+      Requires=mnt-shared.mount
+      
+      [Service]
+      Type=simple
+      ExecStart=/usr/bin/python3 /usr/local/bin/memory-monitor.py
+      Restart=always
+      RestartSec=5
+      
+      [Install]
+      WantedBy=multi-user.target
+
+  # Memory hotplug auto-online script - onlines new memory automatically
+  - path: /usr/local/bin/memory-hotplug-online.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Auto-online hotplugged memory
+      for mem in /sys/devices/system/memory/memory*/state; do
+        state=$(cat "$mem" 2>/dev/null)
+        if [ "$state" = "offline" ]; then
+          echo "Onlining $mem"
+          echo online > "$mem" 2>/dev/null || true
+        fi
+      done
+
+  # Udev rule to auto-online memory when hotplugged
+  - path: /etc/udev/rules.d/99-memory-hotplug.rules
+    permissions: '0644'
+    content: |
+      # Auto-online memory when hotplugged
+      SUBSYSTEM=="memory", ACTION=="add", ATTR{{state}}=="offline", ATTR{{state}}="online"
+
+  # Systemd service to online memory at boot and periodically
+  - path: /etc/systemd/system/memory-hotplug.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Auto-online hotplugged memory
+      After=multi-user.target
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/memory-hotplug-online.sh
+      RemainAfterExit=yes
+      
+      [Install]
+      WantedBy=multi-user.target
+
+  # Timer to periodically check for offline memory
+  - path: /etc/systemd/system/memory-hotplug.timer
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Periodically online hotplugged memory
+      
+      [Timer]
+      OnBootSec=10
+      OnUnitActiveSec=5
+      
+      [Install]
+      WantedBy=timers.target
+
   # First boot progress display script - runs as the main process on tty1
   - path: /usr/local/bin/first-boot-message.sh
     permissions: '0755'
@@ -390,6 +525,13 @@ runcmd:
   - systemctl enable lightdm
   - systemctl enable docker
   - systemctl enable mnt-shared.mount
+  - systemctl enable memory-monitor.service
+  - systemctl enable memory-hotplug.service
+  - systemctl enable memory-hotplug.timer
+  
+  # Reload udev rules for memory hotplug
+  - udevadm control --reload-rules
+  - udevadm trigger
   
   # Add student to docker and autologin groups
   - usermod -aG docker student

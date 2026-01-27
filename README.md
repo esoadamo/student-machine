@@ -83,6 +83,7 @@ student-machine ssh
 | `student-machine stop` | Stop the VM gracefully |
 | `student-machine status` | Show VM status |
 | `student-machine ssh` | SSH into the VM |
+| `student-machine balloon` | Start memory balloon controller (dynamic memory) |
 | `student-machine service install` | Install as system service |
 | `student-machine service uninstall` | Remove system service |
 
@@ -130,6 +131,33 @@ Options:
   --memory, -m SIZE  Memory allocation (default: 2048M)
   --cpus, -c NUM     Number of CPUs (default: 2)
 ```
+
+### Memory Balloon Controller
+
+The VM supports dynamic memory management through a balloon controller. The VM is started with a configurable maximum memory limit, and the balloon controller can:
+- **Increase** guest memory when VM is running low (up to the max limit)
+- **Decrease** guest memory when VM has excess free memory (reclaim for host)
+
+```bash
+# Start balloon controller (runs in background)
+student-machine balloon
+
+# With custom limits
+student-machine balloon --min-memory 1024 --max-memory 8192
+
+Options:
+  --min-memory, -min  Minimum VM memory in MB (default: 1024)
+  --max-memory, -max  Maximum VM memory in MB (default: 8192)
+  --shared-dir PATH   Directory shared with VM (default: ~/.vm/data)
+```
+
+**How it works:**
+1. VM runs a memory monitor that reports stats to `/mnt/shared/.vm-memory-status`
+2. Host-side balloon controller reads these stats every 5 seconds
+3. If VM free memory < 30%, controller increases memory (up to max)
+4. If VM free memory > 40%, controller reclaims memory (down to min)
+
+**Note:** The `run` command automatically starts the balloon controller in the background. To use balloon with higher max memory, restart the VM with `--force`.
 
 ## File Locations
 
