@@ -2,15 +2,15 @@
 
 import json
 import os
-import platform
 import shutil
 import signal
 import socket
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Optional
+
+import pycdlib
 
 from . import config
 
@@ -33,9 +33,9 @@ def get_installation_instructions() -> str:
     if system == "linux":
         return """
 Install QEMU on Linux:
-  Ubuntu/Debian: sudo apt install qemu-system-x86 qemu-utils cloud-image-utils
-  Fedora:        sudo dnf install qemu-system-x86 qemu-img cloud-utils
-  Arch:          sudo pacman -S qemu-full cloud-utils
+    Ubuntu/Debian: sudo apt install qemu-system-x86 qemu-utils
+    Fedora:        sudo dnf install qemu-system-x86 qemu-img
+    Arch:          sudo pacman -S qemu-full
 
 For KVM acceleration:
   sudo usermod -aG kvm $USER
@@ -44,17 +44,13 @@ For KVM acceleration:
     elif system == "macos":
         return """
 Install QEMU on macOS:
-  brew install qemu cdrtools
-  
-Note: cdrtools provides 'mkisofs' for creating cloud-init images.
+    brew install qemu
 """
     elif system == "windows":
         return """
 Install QEMU on Windows:
   1. Download from: https://www.qemu.org/download/#windows
   2. Add QEMU to your PATH
-  3. Install genisoimage from: http://smithii.com/files/cdrtools-latest.zip
-     (extract and add to PATH)
 """
     return "Please install QEMU for your system: https://www.qemu.org/download/"
 
@@ -120,7 +116,6 @@ def download_file(url: str, dest: Path, show_progress: bool = True) -> bool:
 
 def create_cloud_init_iso(dest: Path, user_data: str, meta_data: str) -> bool:
     """Create a cloud-init seed ISO image."""
-    system = config.get_system()
     vm_dir = config.get_vm_dir()
     
     user_data_file = vm_dir / "user-data"
@@ -130,127 +125,30 @@ def create_cloud_init_iso(dest: Path, user_data: str, meta_data: str) -> bool:
     user_data_file.write_text(user_data, encoding="utf-8")
     meta_data_file.write_text(meta_data, encoding="utf-8")
     
-    def create_with_pycdlib() -> bool:
-        try:
-            import pycdlib
-        except Exception:
-            print("Error: pycdlib is not installed.")
-            print("Install it with: pip install pycdlib")
-            return False
-
-        try:
-            iso = pycdlib.PyCdlib()
-            iso.new(
-                interchange_level=3,
-                joliet=True,
-                rock_ridge="1.09",
-                vol_ident="cidata",
-            )
-            iso.add_file(
-                str(user_data_file),
-                iso_path="/USERDATA.;1",
-                joliet_path="/user-data",
-                rr_name="user-data",
-            )
-            iso.add_file(
-                str(meta_data_file),
-                iso_path="/METADATA.;1",
-                joliet_path="/meta-data",
-                rr_name="meta-data",
-            )
-            iso.write(str(dest))
-            iso.close()
-            return True
-        except Exception as e:
-            print(f"Error creating ISO with pycdlib: {e}")
-            return False
-
     try:
-        # Try different tools based on platform
-        if system == "linux":
-            # Try cloud-localds first (from cloud-image-utils)
-            if shutil.which("cloud-localds"):
-                run_command([
-                    "cloud-localds", str(dest), 
-                    str(user_data_file), str(meta_data_file)
-                ])
-            elif shutil.which("genisoimage"):
-                run_command([
-                    "genisoimage", "-output", str(dest),
-                    "-volid", "cidata", "-joliet", "-rock",
-                    str(user_data_file), str(meta_data_file)
-                ])
-            elif shutil.which("mkisofs"):
-                run_command([
-                    "mkisofs", "-output", str(dest),
-                    "-volid", "cidata", "-joliet", "-rock",
-                    str(user_data_file), str(meta_data_file)
-                ])
-            else:
-                print("Error: No ISO creation tool found.")
-                print("Install cloud-image-utils: sudo apt install cloud-image-utils")
-                return False
-                
-        elif system == "macos":
-            if shutil.which("mkisofs"):
-                run_command([
-                    "mkisofs", "-output", str(dest),
-                    "-volid", "cidata", "-joliet", "-rock",
-                    str(user_data_file), str(meta_data_file)
-                ])
-            elif shutil.which("hdiutil"):
-                # Create a temporary directory structure
-                temp_dir = vm_dir / "cidata_temp"
-                temp_dir.mkdir(exist_ok=True)
-                shutil.copy(user_data_file, temp_dir / "user-data")
-                shutil.copy(meta_data_file, temp_dir / "meta-data")
-                run_command([
-                    "hdiutil", "makehybrid", "-iso", "-joliet",
-                    "-o", str(dest), str(temp_dir)
-                ])
-                shutil.rmtree(temp_dir)
-            else:
-                print("Error: No ISO creation tool found.")
-                print("Install cdrtools: brew install cdrtools")
-                return False
-                
-        elif system == "windows":
-            mkisofs_path = shutil.which("mkisofs")
-            genisoimage_path = shutil.which("genisoimage")
-            if mkisofs_path:
-                mkisofs_dir = Path(mkisofs_path).parent
-                env = os.environ.copy()
-                env["PATH"] = f"{mkisofs_dir};{env.get('PATH', '')}"
-                try:
-                    run_command([
-                        mkisofs_path, "-o", str(dest),
-                        "-volid", "cidata", "-joliet", "-rock",
-                        str(user_data_file), str(meta_data_file)
-                    ], cwd=mkisofs_dir, env=env)
-                except Exception:
-                    print("mkisofs failed. Trying pycdlib fallback...")
-                    return create_with_pycdlib()
-            elif genisoimage_path:
-                genisoimage_dir = Path(genisoimage_path).parent
-                env = os.environ.copy()
-                env["PATH"] = f"{genisoimage_dir};{env.get('PATH', '')}"
-                try:
-                    run_command([
-                        genisoimage_path, "-o", str(dest),
-                        "-volid", "cidata", "-joliet", "-rock",
-                        str(user_data_file), str(meta_data_file)
-                    ], cwd=genisoimage_dir, env=env)
-                except Exception:
-                    print("genisoimage failed. Trying pycdlib fallback...")
-                    return create_with_pycdlib()
-            else:
-                print("No ISO creation tool found. Trying pycdlib fallback...")
-                return create_with_pycdlib()
-        
+        iso = pycdlib.PyCdlib()
+        iso.new(
+            interchange_level=3,
+            joliet=True,
+            rock_ridge="1.09",
+            vol_ident="cidata",
+        )
+        iso.add_file(
+            str(user_data_file),
+            iso_path="/USERDATA.;1",
+            joliet_path="/user-data",
+            rr_name="user-data",
+        )
+        iso.add_file(
+            str(meta_data_file),
+            iso_path="/METADATA.;1",
+            joliet_path="/meta-data",
+            rr_name="meta-data",
+        )
+        iso.write(str(dest))
+        iso.close()
+
         return True
-    except Exception as e:
-        print(f"Error creating cloud-init ISO: {e}")
-        return False
     finally:
         # Cleanup temp files
         user_data_file.unlink(missing_ok=True)

@@ -33,7 +33,7 @@ student-machine qemu-install --check
 #### Linux (Ubuntu/Debian)
 
 ```bash
-sudo apt install qemu-system-x86 qemu-utils cloud-image-utils
+sudo apt install qemu-system-x86 qemu-utils
 
 # For KVM acceleration (recommended)
 sudo usermod -aG kvm $USER
@@ -43,15 +43,13 @@ sudo usermod -aG kvm $USER
 ### macOS
 
 ```bash
-brew install qemu cdrtools
+brew install qemu
 ```
 
 ### Windows
 
 1. Download QEMU from: https://www.qemu.org/download/#windows
 2. Add QEMU to your PATH
-3. Download cdrtools from: http://smithii.com/files/cdrtools-latest.zip
-4. Extract and add to PATH
 
 ## Installation
 

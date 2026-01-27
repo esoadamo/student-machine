@@ -13,8 +13,6 @@ from pathlib import Path
 # QEMU installer URLs
 QEMU_WINDOWS_URL = "https://cdn.adamhlavacek.com/qemu-windows.zip"
 QEMU_WINDOWS_ARCHIVE = "qemu-windows.zip"
-CDRTFE_WINDOWS_URL = "https://cdn.adamhlavacek.com/cdrtfe-1.5.9.1.zip"
-CDRTFE_WINDOWS_ARCHIVE = "cdrtfe-1.5.9.1.zip"
 
 
 def get_qemu_binary() -> str:
@@ -51,15 +49,6 @@ def get_qemu_version() -> str | None:
     return None
 
 
-def is_cloud_utils_installed() -> bool:
-    """Check if cloud-image-utils (cloud-localds) is installed."""
-    # On different systems it may be called differently
-    for cmd in ["cloud-localds", "genisoimage", "mkisofs"]:
-        if shutil.which(cmd):
-            return True
-    return False
-
-
 def check_prerequisites() -> dict:
     """Check all prerequisites and return status."""
     system = platform.system()
@@ -68,7 +57,6 @@ def check_prerequisites() -> dict:
         "system": system,
         "qemu_installed": is_qemu_installed(),
         "qemu_version": get_qemu_version(),
-        "cloud_utils_installed": is_cloud_utils_installed(),
         "all_ok": False,
     }
     
@@ -86,7 +74,7 @@ def check_prerequisites() -> dict:
                 kvm_access = False
         status["kvm_accessible"] = kvm_access
     
-    status["all_ok"] = status["qemu_installed"] and status["cloud_utils_installed"]
+    status["all_ok"] = status["qemu_installed"]
     
     return status
 
@@ -105,12 +93,6 @@ def print_status(status: dict) -> None:
             print(f"  {status['qemu_version']}")
     else:
         print("✗ QEMU: Not installed")
-    
-    # Cloud utils
-    if status["cloud_utils_installed"]:
-        print("✓ Cloud image tools: Installed")
-    else:
-        print("✗ Cloud image tools: Not installed")
     
     # KVM on Linux
     if status["system"] == "Linux":
@@ -137,7 +119,7 @@ def install_linux() -> bool:
         print()
         print("Run the following command:")
         print()
-        print("  sudo apt update && sudo apt install -y qemu-system-x86 qemu-utils cloud-image-utils")
+        print("  sudo apt update && sudo apt install -y qemu-system-x86 qemu-utils")
         print()
         
         response = input("Run this command now? [y/N]: ").strip().lower()
@@ -146,7 +128,7 @@ def install_linux() -> bool:
                 subprocess.run(["sudo", "apt", "update"], check=True)
                 subprocess.run([
                     "sudo", "apt", "install", "-y",
-                    "qemu-system-x86", "qemu-utils", "cloud-image-utils"
+                    "qemu-system-x86", "qemu-utils"
                 ], check=True)
                 print()
                 print("✓ Installation complete!")
@@ -176,7 +158,7 @@ def install_linux() -> bool:
         print()
         print("Run the following command:")
         print()
-        print("  sudo dnf install -y qemu-system-x86 qemu-img cloud-utils")
+        print("  sudo dnf install -y qemu-system-x86 qemu-img")
         print()
         
         response = input("Run this command now? [y/N]: ").strip().lower()
@@ -184,7 +166,7 @@ def install_linux() -> bool:
             try:
                 subprocess.run([
                     "sudo", "dnf", "install", "-y",
-                    "qemu-system-x86", "qemu-img", "cloud-utils"
+                    "qemu-system-x86", "qemu-img"
                 ], check=True)
                 print()
                 print("✓ Installation complete!")
@@ -202,7 +184,7 @@ def install_linux() -> bool:
         print()
         print("Run the following command:")
         print()
-        print("  sudo pacman -S qemu-full cloud-image-utils")
+        print("  sudo pacman -S qemu-full")
         print()
         
         response = input("Run this command now? [y/N]: ").strip().lower()
@@ -210,7 +192,7 @@ def install_linux() -> bool:
             try:
                 subprocess.run([
                     "sudo", "pacman", "-S", "--noconfirm",
-                    "qemu-full", "cloud-image-utils"
+                    "qemu-full"
                 ], check=True)
                 print()
                 print("✓ Installation complete!")
@@ -228,7 +210,7 @@ def install_linux() -> bool:
         print()
         print("Run the following command:")
         print()
-        print("  sudo zypper install qemu-x86 qemu-tools cloud-init")
+        print("  sudo zypper install qemu-x86 qemu-tools")
         print()
         
         response = input("Run this command now? [y/N]: ").strip().lower()
@@ -236,7 +218,7 @@ def install_linux() -> bool:
             try:
                 subprocess.run([
                     "sudo", "zypper", "install", "-y",
-                    "qemu-x86", "qemu-tools", "cloud-init"
+                    "qemu-x86", "qemu-tools"
                 ], check=True)
                 print()
                 print("✓ Installation complete!")
@@ -254,7 +236,6 @@ def install_linux() -> bool:
         print("Please install QEMU manually:")
         print("  - qemu-system-x86_64 (or qemu-system-aarch64 for ARM)")
         print("  - qemu-img")
-        print("  - cloud-localds or genisoimage")
         return False
 
 
@@ -276,13 +257,13 @@ def install_macos() -> bool:
     print()
     print("Run the following command:")
     print()
-    print("  brew install qemu cdrtools")
+    print("  brew install qemu")
     print()
     
     response = input("Run this command now? [y/N]: ").strip().lower()
     if response == "y":
         try:
-            subprocess.run(["brew", "install", "qemu", "cdrtools"], check=True)
+            subprocess.run(["brew", "install", "qemu"], check=True)
             print()
             print("✓ Installation complete!")
             return True
@@ -328,12 +309,6 @@ def install_windows() -> bool:
         if get_qemu_version():
             print(f"  {get_qemu_version()}")
 
-    cdrtools_in_path = any(
-        shutil.which(cmd) for cmd in ["mkisofs", "genisoimage", "cloud-localds"]
-    )
-    if cdrtools_in_path:
-        print("✓ CDRTools are already installed!")
-
     # Check common installation paths
     common_paths = [
         Path("C:/Program Files/qemu"),
@@ -344,19 +319,10 @@ def install_windows() -> bool:
 
     localappdata = os.environ.get("LOCALAPPDATA")
     qemu_bin_dir = find_qemu_bin_dir(common_paths)
-    cdrtools_dir = None
-    if localappdata:
-        cdrtools_candidate = Path(localappdata) / "cdrtfe-1.5.9.1" / "tools" / "cdrtools"
-        if cdrtools_candidate.exists():
-            cdrtools_dir = cdrtools_candidate
-
     paths_to_add = []
     if qemu_bin_dir and not qemu_in_path:
         print(f"Found QEMU at: {qemu_bin_dir}")
         paths_to_add.append(qemu_bin_dir)
-    if cdrtools_dir and not cdrtools_in_path:
-        print(f"Found CDRTools at: {cdrtools_dir}")
-        paths_to_add.append(cdrtools_dir)
 
     if paths_to_add:
         print()
@@ -366,19 +332,15 @@ def install_windows() -> bool:
         print("Restart your terminal/command prompt to pick up PATH changes.")
 
     qemu_ready = qemu_in_path or qemu_bin_dir is not None
-    cdrtools_ready = cdrtools_in_path or cdrtools_dir is not None
-    if qemu_ready and cdrtools_ready:
+    if qemu_ready:
         return True
     
     # Download and install missing components
     need_qemu_download = not qemu_ready
-    need_cdrtools_download = not cdrtools_ready
 
-    print("Downloading archives from:")
+    print("Downloading archive from:")
     if need_qemu_download:
         print(f"  {QEMU_WINDOWS_URL}")
-    if need_cdrtools_download:
-        print(f"  {CDRTFE_WINDOWS_URL}")
     print()
 
     response = input("Download and install now? [y/N]: ").strip().lower()
@@ -390,26 +352,16 @@ def install_windows() -> bool:
         if need_qemu_download:
             print(f"  {step}. Download: {QEMU_WINDOWS_URL}")
             step += 1
-        if need_cdrtools_download:
-            print(f"  {step}. Download: {CDRTFE_WINDOWS_URL}")
-            step += 1
         if need_qemu_download:
             print(f"  {step}. Unpack qemu-windows into %LOCALAPPDATA%")
             step += 1
-        if need_cdrtools_download:
-            print(f"  {step}. Unpack cdrtfe-1.5.9.1 into %LOCALAPPDATA%")
-            step += 1
         if need_qemu_download:
             print(f"  {step}. Add %LOCALAPPDATA%\\qemu-windows to your user PATH")
-            step += 1
-        if need_cdrtools_download:
-            print(f"  {step}. Add %LOCALAPPDATA%\\cdrtfe-1.5.9.1\\tools\\cdrtools to your user PATH")
         return False
     
     # Download to temp directory
     temp_dir = Path(tempfile.gettempdir())
     archive_path = temp_dir / QEMU_WINDOWS_ARCHIVE
-    cdrtfe_archive_path = temp_dir / CDRTFE_WINDOWS_ARCHIVE
     
     try:
         print("Downloading...")
@@ -441,15 +393,9 @@ def install_windows() -> bool:
             print("Downloading QEMU...")
             download_with_progress(QEMU_WINDOWS_URL, archive_path)
             print()
-        if need_cdrtools_download:
-            print("Downloading CDRTools...")
-            download_with_progress(CDRTFE_WINDOWS_URL, cdrtfe_archive_path)
-            print()
         print()
         if need_qemu_download:
             print(f"Downloaded to: {archive_path}")
-        if need_cdrtools_download:
-            print(f"Downloaded to: {cdrtfe_archive_path}")
         print()
         print("Extracting archives...")
 
@@ -459,20 +405,12 @@ def install_windows() -> bool:
 
         target_root = Path(localappdata)
         qemu_target_dir = target_root / "qemu-windows"
-        cdrtfe_target_dir = target_root / "cdrtfe-1.5.9.1"
 
         if need_qemu_download:
             with zipfile.ZipFile(archive_path, "r") as zip_ref:
                 zip_ref.extractall(target_root)
             if not qemu_target_dir.exists():
                 print(f"Error: {qemu_target_dir} was not found after extraction.")
-                return False
-
-        if need_cdrtools_download:
-            with zipfile.ZipFile(cdrtfe_archive_path, "r") as zip_ref:
-                zip_ref.extractall(target_root)
-            if not cdrtfe_target_dir.exists():
-                print(f"Error: {cdrtfe_target_dir} was not found after extraction.")
                 return False
 
         # Find QEMU binary directory to add to PATH
@@ -483,18 +421,9 @@ def install_windows() -> bool:
                 print("Error: QEMU executable not found in extracted folder.")
                 return False
 
-        # Add to user PATH
-        if need_cdrtools_download:
-            cdrtools_dir = cdrtfe_target_dir / "tools" / "cdrtools"
-            if not cdrtools_dir.exists():
-                print(f"Error: {cdrtools_dir} was not found after extraction.")
-                return False
-
         paths_to_add = []
         if qemu_bin_dir and not qemu_in_path:
             paths_to_add.append(qemu_bin_dir)
-        if cdrtools_dir and not cdrtools_in_path:
-            paths_to_add.append(cdrtools_dir)
 
         if paths_to_add:
             add_to_user_path(paths_to_add)
@@ -503,12 +432,8 @@ def install_windows() -> bool:
         print("✓ Installation complete!")
         if need_qemu_download:
             print(f"  Installed to: {qemu_target_dir}")
-        if need_cdrtools_download:
-            print(f"  Installed to: {cdrtfe_target_dir}")
         if qemu_bin_dir and not qemu_in_path:
             print(f"  Added to user PATH: {qemu_bin_dir}")
-        if cdrtools_dir and not cdrtools_in_path:
-            print(f"  Added to user PATH: {cdrtools_dir}")
         print()
         print("Restart your terminal/command prompt to pick up PATH changes.")
 
@@ -522,20 +447,11 @@ def install_windows() -> bool:
         if need_qemu_download:
             print(f"  {step}. Download: {QEMU_WINDOWS_URL}")
             step += 1
-        if need_cdrtools_download:
-            print(f"  {step}. Download: {CDRTFE_WINDOWS_URL}")
-            step += 1
         if need_qemu_download:
             print(f"  {step}. Unpack qemu-windows into %LOCALAPPDATA%")
             step += 1
-        if need_cdrtools_download:
-            print(f"  {step}. Unpack cdrtfe-1.5.9.1 into %LOCALAPPDATA%")
-            step += 1
         if need_qemu_download:
             print(f"  {step}. Add %LOCALAPPDATA%\\qemu-windows to your user PATH")
-            step += 1
-        if need_cdrtools_download:
-            print(f"  {step}. Add %LOCALAPPDATA%\\cdrtfe-1.5.9.1\\tools\\cdrtools to your user PATH")
         return False
 
 
@@ -589,9 +505,6 @@ def check_and_prompt_install() -> bool:
     
     if not status["qemu_installed"]:
         print("✗ QEMU is not installed")
-    if not status["cloud_utils_installed"]:
-        print("✗ Cloud image tools are not installed")
-    
     print()
     print("The VM requires QEMU to run.")
     print()
