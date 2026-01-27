@@ -3,7 +3,6 @@
 import json
 import socket
 import time
-import threading
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -195,16 +194,16 @@ class MemoryBalloonController:
     """
     Controls VM memory dynamically based on guest memory pressure.
     
-    IMPORTANT: The virtio-balloon can only RECLAIM memory from the VM and
-    RELEASE it back (up to initial allocation). It cannot ADD memory beyond
-    what the VM was started with.
+    Memory management strategy:
+    - To ADD memory beyond initial allocation: Use memory hotplug (pc-dimm devices)
+    - To RECLAIM memory back to host: Use balloon inflation
+    - To RELEASE reclaimed memory back to VM: Use balloon deflation (up to initial)
     
-    The balloon works by:
-    - Inflating: Takes memory from VM (VM sees less memory, host reclaims it)
-    - Deflating: Gives memory back to VM (up to initial allocation)
+    The virtio-balloon can only reclaim/release memory within the initial allocation.
+    Memory hotplug is needed to actually increase total VM memory.
     
     The VM runs a monitor that writes memory stats to a shared file.
-    This controller reads those stats and adjusts the balloon accordingly.
+    This controller reads those stats and adjusts memory accordingly.
     """
     
     def __init__(
@@ -230,9 +229,8 @@ class MemoryBalloonController:
         self.status_file = shared_dir / ".vm-memory-status"
         self.qmp = QMPClient(qmp_socket)
         self._running = False
-        self._thread: Optional[threading.Thread] = None
         self._last_processed_seq_id: int = 0  # Track last processed record
-        self._initial_balloon_mb: Optional[int] = None  # Track initial balloon (ceiling)
+        self._initial_balloon_mb: Optional[int] = None  # Initial balloon (floor for reclaim)
         self._hotplug_slot_counter: int = 0  # Counter for hotplug slot IDs
         self._total_hotplugged_mb: int = 0  # Track total hotplugged memory
         self._max_slots: int = 16  # Maximum number of DIMM slots available
@@ -431,22 +429,6 @@ class MemoryBalloonController:
                     pid_file.unlink()
                 except:
                     pass
-    
-    def start(self):
-        """Start the balloon controller in a background thread."""
-        if self._running:
-            return
-        
-        self._running = True
-        self._thread = threading.Thread(target=self._run_loop, daemon=True)
-        self._thread.start()
-    
-    def stop(self):
-        """Stop the balloon controller."""
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=10)
-            self._thread = None
 
 
 def get_qmp_socket_path() -> Path:

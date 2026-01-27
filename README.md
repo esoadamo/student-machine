@@ -1,15 +1,16 @@
 # Student Machine
 
-A cross-platform QEMU VM manager that provides a unified Debian Linux virtual machine with XFCE desktop environment for students.
+A cross-platform QEMU VM manager that provides a Debian Linux virtual machine with XFCE desktop environment for students.
 
 ## Features
 
 - **Cross-platform**: Works on Linux, macOS, and Windows
-- **Debian 12 with XFCE**: Lightweight desktop environment
+- **Debian 12 with XFCE**: Lightweight desktop environment with auto-login
 - **Hardware acceleration**: Automatic KVM (Linux), HVF (macOS), or WHPX (Windows)
+- **Dynamic memory**: Memory hotplug automatically adds memory when VM needs it
 - **Shared folders**: Easily share files between host and VM
 - **SSH access**: Connect via SSH on port 2222
-- **Simple CLI**: Easy-to-use command line interface
+- **Pre-installed tools**: Python, Node.js, Docker, VS Code, and more
 
 ## Prerequisites
 
@@ -39,11 +40,14 @@ brew install qemu cdrtools
 ## Installation
 
 ```bash
-# Install from source
-pip install -e .
+# Install with uv (recommended)
+uv tool install student-machine
 
-# Or install directly
+# Or install with pip
 pip install student-machine
+
+# Or install from source
+pip install -e .
 ```
 
 ## Quick Start
@@ -54,18 +58,9 @@ student-machine run
 
 # With Czech locale and keyboard layout
 student-machine run --locale cs_CZ.UTF-8 --keyboard cz
-
-# Or step by step:
-# 1. Set up the VM (downloads Debian image, ~5-10 minutes first time)
-student-machine setup
-
-# 2. Start the VM with GUI
-student-machine start --gui
-
-# 3. Or start headless and use SSH
-student-machine start
-student-machine ssh
 ```
+
+The first boot takes 5-10 minutes to install the desktop environment. Subsequent boots are fast.
 
 ## VM Credentials
 
@@ -76,18 +71,18 @@ student-machine ssh
 
 | Command | Description |
 |---------|-------------|
-| `student-machine run` | **One-click mode**: auto-setup + start with GUI + autologin |
+| `student-machine run` | **One-click mode**: auto-setup + start with GUI |
 | `student-machine setup` | Download Debian image and create VM disk |
-| `student-machine start` | Start the VM (headless) |
+| `student-machine start` | Start the VM (headless by default) |
 | `student-machine start --gui` | Start the VM with graphical display |
 | `student-machine stop` | Stop the VM gracefully |
 | `student-machine status` | Show VM status |
 | `student-machine ssh` | SSH into the VM |
-| `student-machine balloon` | Start memory balloon controller (dynamic memory) |
+| `student-machine balloon` | Start memory controller (auto-started by `run`) |
 | `student-machine service install` | Install as system service |
 | `student-machine service uninstall` | Remove system service |
 
-### Run Options (One-Click Mode)
+### Run Options
 
 ```bash
 student-machine run [OPTIONS]
@@ -96,13 +91,13 @@ Options:
   --force, -f        Force recreation of VM images
   --shared-dir PATH  Directory to share with VM (default: ~/.vm/data)
   --port, -p PORT    SSH port forwarding (default: 2222)
-  --memory, -m SIZE  Memory allocation (default: 2048M)
+  --memory, -m SIZE  Initial memory allocation (default: 2048M)
   --cpus, -c NUM     Number of CPUs (default: 2)
   --locale, -l LOC   System locale (default: en_US.UTF-8)
   --keyboard, -k KB  Keyboard layout (default: us)
 ```
 
-#### Locale and Keyboard Examples
+### Locale and Keyboard Examples
 
 ```bash
 # Czech locale and keyboard
@@ -128,36 +123,38 @@ Options:
   --console          Enable serial console
   --shared-dir PATH  Directory to share with VM (default: ~/.vm/data)
   --port, -p PORT    SSH port forwarding (default: 2222)
-  --memory, -m SIZE  Memory allocation (default: 2048M)
+  --memory, -m SIZE  Initial memory allocation (default: 2048M)
   --cpus, -c NUM     Number of CPUs (default: 2)
 ```
 
-### Memory Balloon Controller
+### Dynamic Memory Management
 
-The VM supports dynamic memory management through a balloon controller. The VM is started with a configurable maximum memory limit, and the balloon controller can:
-- **Increase** guest memory when VM is running low (up to the max limit)
-- **Decrease** guest memory when VM has excess free memory (reclaim for host)
+The VM supports automatic memory scaling through memory hotplug:
+
+- VM starts with initial memory (default 2GB)
+- When VM memory runs low (<30% free), more memory is hotplugged (in 1GB chunks)
+- When VM has excess memory (>50% free), memory is reclaimed via balloon
+- Maximum memory is limited to host RAM - 1GB
+- Up to 16 DIMM slots are available for memory expansion
+
+The `run` command automatically starts the memory controller in the background.
 
 ```bash
-# Start balloon controller (runs in background)
+# Manual control (if not using 'run')
 student-machine balloon
 
 # With custom limits
-student-machine balloon --min-memory 1024 --max-memory 8192
+student-machine balloon --min-memory 1024 --max-memory 16384
 
-Options:
-  --min-memory, -min  Minimum VM memory in MB (default: 1024)
-  --max-memory, -max  Maximum VM memory in MB (default: 8192)
-  --shared-dir PATH   Directory shared with VM (default: ~/.vm/data)
+# Run in foreground (for debugging)
+student-machine balloon --foreground
 ```
 
 **How it works:**
 1. VM runs a memory monitor that reports stats to `/mnt/shared/.vm-memory-status`
-2. Host-side balloon controller reads these stats every 5 seconds
-3. If VM free memory < 30%, controller increases memory (up to max)
-4. If VM free memory > 40%, controller reclaims memory (down to min)
-
-**Note:** The `run` command automatically starts the balloon controller in the background. To use balloon with higher max memory, restart the VM with `--force`.
+2. Host-side controller reads these stats every 5 seconds
+3. If VM free memory < 30%, controller hotplugs more memory (up to max)
+4. If VM free memory > 50%, controller reclaims memory via balloon (down to initial)
 
 ## File Locations
 
@@ -170,7 +167,9 @@ All VM files are stored in `~/.vm/`:
 | `~/.vm/seed.iso` | Cloud-init configuration |
 | `~/.vm/data/` | Shared folder (mounted as `/mnt/shared` in VM) |
 | `~/.vm/student-vm.log` | QEMU log file |
-| `~/.vm/student-vm.pid` | PID file when running |
+| `~/.vm/balloon.log` | Memory controller log |
+| `~/.vm/student-vm.pid` | VM PID file |
+| `~/.vm/balloon.pid` | Memory controller PID file |
 
 ## Shared Folders
 
@@ -194,26 +193,29 @@ student-machine ssh
 ssh student@localhost -p 2222
 ```
 
-## First Boot
+## Pre-installed Software
 
-The first boot takes 5-10 minutes as cloud-init:
+The first boot installs a complete development environment:
 
-1. Resizes the disk
-2. Installs XFCE desktop environment
-3. Configures locale and keyboard layout
-4. Installs development tools:
-   - Python 3, pip, venv
-   - Node.js, npm
-   - Docker, docker-compose
-   - VS Code (code editor)
-   - Thonny (Python IDE for beginners)
-   - uv (fast Python package manager)
-5. Installs terminal tools:
-   - btop (system monitor)
-   - tmux, screen, byobu (terminal multiplexers)
-6. Configures auto-login
+**Development:**
+- Python 3, pip, venv
+- Node.js, npm
+- Docker, docker-compose
+- Git
 
-After the first boot completes, the VM will have a full graphical desktop.
+**Editors:**
+- VS Code
+- VSCodium (via Flatpak)
+- Thonny (Python IDE)
+- Kate
+
+**Tools:**
+- uv (fast Python package manager)
+- httpie (HTTP client)
+- pytest, flake8, pylint
+- btop (system monitor)
+- tmux, screen, byobu (terminal multiplexers)
+- sqlite3
 
 ## System Service
 
@@ -269,10 +271,27 @@ sudo usermod -aG kvm $USER
 
 The 9p filesystem requires QEMU to be built with virtfs support. On macOS, you may need to install QEMU from source or use a different sharing method.
 
+### Memory not increasing
+
+Check the balloon controller log:
+```bash
+tail -f ~/.vm/balloon.log
+```
+
+Ensure the memory monitor is running inside the VM:
+```bash
+# Inside VM
+systemctl status memory-monitor
+```
+
 ### View logs
 
 ```bash
+# QEMU log
 tail -f ~/.vm/student-vm.log
+
+# Memory controller log
+tail -f ~/.vm/balloon.log
 ```
 
 ## Development
@@ -282,13 +301,10 @@ tail -f ~/.vm/student-vm.log
 git clone https://github.com/yourusername/student-machine.git
 cd student-machine
 
-# Install in development mode
+# Install in development mode with uv
+uv sync
+uv run student-machine --help
+
+# Or with pip
 pip install -e .
-
-# Run directly
-python -m student_machine --help
 ```
-
-## License
-
-MIT License
