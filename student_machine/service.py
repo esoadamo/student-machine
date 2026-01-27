@@ -154,7 +154,7 @@ def install_systemd_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     print(f"  Python: {python_path}")
     
     try:
-        service_file.write_text(service_content)
+        service_file.write_text(service_content, encoding="utf-8")
         service_file.chmod(0o644)
         
         # Reload systemd
@@ -231,7 +231,7 @@ def install_launchd_service(name: str = config.DEFAULT_VM_NAME) -> bool:
     print(f"Installing launchd service for VM: {name}...")
     
     try:
-        plist_file.write_text(plist_content)
+        plist_file.write_text(plist_content, encoding="utf-8")
         
         print()
         print(f"✓ Service installed: {label}")
@@ -294,7 +294,10 @@ def install_windows_task(name: str = config.DEFAULT_VM_NAME) -> bool:
     vm_dir.mkdir(parents=True, exist_ok=True)
     
     start_script = vm_dir / "start-vm.bat"
-    start_script.write_text(f'@echo off\n"{python_path}" -m student_machine start --name {name}\n')
+    start_script.write_text(
+        f'@echo off\n"{python_path}" -m student_machine start --name {name}\n',
+        encoding="utf-8"
+    )
     
     try:
         # Create scheduled task (manual trigger, not automatic)

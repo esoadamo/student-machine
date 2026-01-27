@@ -64,6 +64,7 @@ def run_command(
     check: bool = True,
     capture_output: bool = False,
     cwd: Optional[Path] = None,
+    env: Optional[dict] = None,
 ) -> subprocess.CompletedProcess:
     """Run a command and handle errors."""
     try:
@@ -73,6 +74,7 @@ def run_command(
             capture_output=capture_output,
             text=True,
             cwd=cwd,
+            env=env,
         )
         return result
     except subprocess.CalledProcessError as e:
@@ -125,9 +127,44 @@ def create_cloud_init_iso(dest: Path, user_data: str, meta_data: str) -> bool:
     meta_data_file = vm_dir / "meta-data"
     
     # Write cloud-init files
-    user_data_file.write_text(user_data)
-    meta_data_file.write_text(meta_data)
+    user_data_file.write_text(user_data, encoding="utf-8")
+    meta_data_file.write_text(meta_data, encoding="utf-8")
     
+    def create_with_pycdlib() -> bool:
+        try:
+            import pycdlib
+        except Exception:
+            print("Error: pycdlib is not installed.")
+            print("Install it with: pip install pycdlib")
+            return False
+
+        try:
+            iso = pycdlib.PyCdlib()
+            iso.new(
+                interchange_level=3,
+                joliet=True,
+                rock_ridge="1.09",
+                vol_ident="cidata",
+            )
+            iso.add_file(
+                str(user_data_file),
+                iso_path="/USERDATA.;1",
+                joliet_path="/user-data",
+                rr_name="user-data",
+            )
+            iso.add_file(
+                str(meta_data_file),
+                iso_path="/METADATA.;1",
+                joliet_path="/meta-data",
+                rr_name="meta-data",
+            )
+            iso.write(str(dest))
+            iso.close()
+            return True
+        except Exception as e:
+            print(f"Error creating ISO with pycdlib: {e}")
+            return False
+
     try:
         # Try different tools based on platform
         if system == "linux":
@@ -178,22 +215,37 @@ def create_cloud_init_iso(dest: Path, user_data: str, meta_data: str) -> bool:
                 return False
                 
         elif system == "windows":
-            if shutil.which("mkisofs"):
-                run_command([
-                    "mkisofs", "-output", str(dest),
-                    "-volid", "cidata", "-joliet", "-rock",
-                    str(user_data_file), str(meta_data_file)
-                ])
-            elif shutil.which("genisoimage"):
-                run_command([
-                    "genisoimage", "-output", str(dest),
-                    "-volid", "cidata", "-joliet", "-rock",
-                    str(user_data_file), str(meta_data_file)
-                ])
+            mkisofs_path = shutil.which("mkisofs")
+            genisoimage_path = shutil.which("genisoimage")
+            if mkisofs_path:
+                mkisofs_dir = Path(mkisofs_path).parent
+                env = os.environ.copy()
+                env["PATH"] = f"{mkisofs_dir};{env.get('PATH', '')}"
+                try:
+                    run_command([
+                        mkisofs_path, "-o", str(dest),
+                        "-volid", "cidata", "-joliet", "-rock",
+                        str(user_data_file), str(meta_data_file)
+                    ], cwd=mkisofs_dir, env=env)
+                except Exception:
+                    print("mkisofs failed. Trying pycdlib fallback...")
+                    return create_with_pycdlib()
+            elif genisoimage_path:
+                genisoimage_dir = Path(genisoimage_path).parent
+                env = os.environ.copy()
+                env["PATH"] = f"{genisoimage_dir};{env.get('PATH', '')}"
+                try:
+                    run_command([
+                        genisoimage_path, "-o", str(dest),
+                        "-volid", "cidata", "-joliet", "-rock",
+                        str(user_data_file), str(meta_data_file)
+                    ], cwd=genisoimage_dir, env=env)
+                except Exception:
+                    print("genisoimage failed. Trying pycdlib fallback...")
+                    return create_with_pycdlib()
             else:
-                print("Error: No ISO creation tool found.")
-                print("Install genisoimage or mkisofs for Windows.")
-                return False
+                print("No ISO creation tool found. Trying pycdlib fallback...")
+                return create_with_pycdlib()
         
         return True
     except Exception as e:
@@ -213,7 +265,7 @@ def is_vm_running(name: str = config.DEFAULT_VM_NAME) -> tuple[bool, Optional[in
         return False, None
     
     try:
-        pid = int(pid_file.read_text().strip())
+        pid = int(pid_file.read_text(encoding="utf-8").strip())
     except (ValueError, OSError):
         return False, None
     

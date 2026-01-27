@@ -212,7 +212,7 @@ write_files:
           \"\"\"Read memory info from /proc/meminfo.\"\"\"
           info = {{}}
           try:
-              with open("/proc/meminfo") as f:
+              with open("/proc/meminfo", encoding="utf-8") as f:
                   for line in f:
                       parts = line.split()
                       if len(parts) >= 2:
@@ -251,7 +251,7 @@ write_files:
                       "used_mb": (total_kb - available_kb) // 1024,
                   }}
                   
-                  STATUS_FILE.write_text(json.dumps(status))
+                  STATUS_FILE.write_text(json.dumps(status), encoding="utf-8")
               except Exception as e:
                   print(f"Error: {{e}}")
               

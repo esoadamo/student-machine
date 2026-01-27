@@ -13,7 +13,7 @@ from . import utils
 def get_host_memory_mb() -> int:
     """Get total host memory in MB."""
     try:
-        with open("/proc/meminfo") as f:
+        with open("/proc/meminfo", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("MemTotal:"):
                     # Value is in kB
@@ -28,7 +28,7 @@ def get_host_memory_mb() -> int:
 def get_host_available_memory_mb() -> int:
     """Get available host memory in MB."""
     try:
-        with open("/proc/meminfo") as f:
+        with open("/proc/meminfo", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("MemAvailable:"):
                     kb = int(line.split()[1])
@@ -215,34 +215,33 @@ def start_vm(
     print(f"  {' '.join(cmd[:5])}...")
     print()
     
+    def launch_qemu(command: list[str]) -> None:
+        if system == "windows" and console:
+            subprocess.Popen(command)
+            return
+        with open(log_file, "a", encoding="utf-8") as log:
+            if system == "windows":
+                subprocess.Popen(
+                    command,
+                    stdout=log,
+                    stderr=log,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+            else:
+                subprocess.Popen(
+                    command,
+                    stdout=log,
+                    stderr=log,
+                    start_new_session=True
+                )
+
     # Start QEMU
     try:
-        if system == "windows" and console:
-            # On Windows with console, run in foreground
-            process = subprocess.Popen(cmd)
-        else:
-            # Run in background
-            with open(log_file, "a") as log:
-                if system == "windows":
-                    # On Windows, use CREATE_NEW_PROCESS_GROUP
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=log,
-                        stderr=log,
-                        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-                    )
-                else:
-                    # On Unix, daemonize
-                    process = subprocess.Popen(
-                        cmd,
-                        stdout=log,
-                        stderr=log,
-                        start_new_session=True
-                    )
-        
+        launch_qemu(cmd)
+
         # Wait a moment for QEMU to start
         time.sleep(2)
-        
+
         # Check if it started
         is_running, pid = utils.is_vm_running(name)
         if is_running:
@@ -263,11 +262,52 @@ def start_vm(
             print()
             print(f"Monitor progress: tail -f {log_file}")
             return True
-        else:
-            print("Error: Failed to start VM")
-            print(f"Check logs: {log_file}")
-            return False
-            
+
+        # Windows WHPX fallback to TCG
+        if system == "windows" and "-accel" in cmd:
+            try:
+                log_text = ""
+                if log_file.exists():
+                    log_text = log_file.read_text(encoding="utf-8", errors="ignore")
+                whpx_errors = [
+                    "failed to initialize whpx",
+                    "whpx: no accelerator found",
+                    "whpx: no space left on device",
+                ]
+                if any(err in log_text.lower() for err in whpx_errors):
+                    cmd_fallback = cmd.copy()
+                    accel_index = cmd_fallback.index("-accel")
+                    if accel_index + 1 < len(cmd_fallback):
+                        cmd_fallback[accel_index + 1] = "tcg"
+                        print("WHPX failed. Retrying with software acceleration (TCG)...")
+                        launch_qemu(cmd_fallback)
+                        time.sleep(2)
+                        is_running, pid = utils.is_vm_running(name)
+                        if is_running:
+                            print(f"✓ VM started with PID: {pid}")
+                            print()
+                            print("Access information:")
+                            print(f"  SSH:          ssh student@localhost -p {port}")
+                            print(f"  Password:     student")
+                            print(f"  Shared Dir:   {shared_dir}")
+                            print(f"  Guest Mount:  /mnt/shared")
+                            print()
+                            if console and system != "windows":
+                                print(f"Console socket: {console_sock}")
+                                print(f"  Connect with: socat - UNIX-CONNECT:{console_sock}")
+                                print()
+                            print("Cloud-init is provisioning the VM (first boot takes 5-10 minutes)...")
+                            print("The desktop environment will be available after reboot.")
+                            print()
+                            print(f"Monitor progress: tail -f {log_file}")
+                            return True
+            except Exception:
+                pass
+
+        print("Error: Failed to start VM")
+        print(f"Check logs: {log_file}")
+        return False
+
     except Exception as e:
         print(f"Error starting VM: {e}")
         return False

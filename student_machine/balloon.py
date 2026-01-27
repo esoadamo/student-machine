@@ -169,7 +169,7 @@ def is_balloon_running(name: str = config.DEFAULT_VM_NAME) -> Tuple[bool, Option
         return False, None
     
     try:
-        pid = int(pid_file.read_text().strip())
+        pid = int(pid_file.read_text(encoding="utf-8").strip())
         # Check if process is still running
         import os
         os.kill(pid, 0)  # Signal 0 just checks if process exists
@@ -243,7 +243,7 @@ class MemoryBalloonController:
             if not self.status_file.exists():
                 return None
             
-            content = self.status_file.read_text()
+            content = self.status_file.read_text(encoding="utf-8")
             return json.loads(content)
         except Exception:
             return None
@@ -251,7 +251,7 @@ class MemoryBalloonController:
     def get_host_available_memory_mb(self) -> int:
         """Get available memory on host system."""
         try:
-            with open("/proc/meminfo") as f:
+            with open("/proc/meminfo", encoding="utf-8") as f:
                 for line in f:
                     if line.startswith("MemAvailable:"):
                         # Value is in kB
@@ -471,7 +471,7 @@ def start_balloon_controller(
     if pid > 0:
         # Parent process - write PID and return
         pid_file = get_balloon_pid_file(name)
-        pid_file.write_text(str(pid))
+        pid_file.write_text(str(pid), encoding="utf-8")
         return True
     else:
         # Child process - detach and run
@@ -479,7 +479,7 @@ def start_balloon_controller(
         
         # Redirect stdout/stderr to log file
         log_file = config.get_balloon_log_file(name)
-        with open(log_file, "a") as log:
+        with open(log_file, "a", encoding="utf-8") as log:
             os.dup2(log.fileno(), 1)
             os.dup2(log.fileno(), 2)
         

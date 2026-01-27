@@ -78,7 +78,7 @@ def check_prerequisites() -> dict:
         kvm_access = False
         if status["kvm_available"]:
             try:
-                with open("/dev/kvm", "r"):
+                with open("/dev/kvm", "r", encoding="utf-8"):
                     kvm_access = True
             except PermissionError:
                 kvm_access = False
@@ -154,7 +154,7 @@ def install_linux() -> bool:
                 # Check KVM access
                 if Path("/dev/kvm").exists():
                     try:
-                        with open("/dev/kvm", "r"):
+                        with open("/dev/kvm", "r", encoding="utf-8"):
                             pass
                     except PermissionError:
                         print()

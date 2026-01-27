@@ -405,7 +405,7 @@ def main() -> int:
             if pid > 0:
                 # Parent process - write PID and exit
                 balloon_pid_file = get_balloon_pid_file(args.name)
-                balloon_pid_file.write_text(str(pid))
+                balloon_pid_file.write_text(str(pid), encoding="utf-8")
                 print(f"Memory balloon controller started in background (PID: {pid})")
                 print(f"  Min memory: {args.min_memory}MB")
                 print(f"  Max memory: {max_memory}MB")
@@ -418,7 +418,7 @@ def main() -> int:
                 os.setsid()
                 # Redirect stdout/stderr to log file
                 log_file = config.get_balloon_log_file(args.name)
-                with open(log_file, "a") as log:
+                with open(log_file, "a", encoding="utf-8") as log:
                     os.dup2(log.fileno(), 1)
                     os.dup2(log.fileno(), 2)
         else:
