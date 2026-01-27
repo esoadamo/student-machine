@@ -1,11 +1,11 @@
 # Student Machine
 
-A cross-platform QEMU VM manager that provides a unified Debian Linux virtual machine with LXQT desktop environment for students.
+A cross-platform QEMU VM manager that provides a unified Debian Linux virtual machine with XFCE desktop environment for students.
 
 ## Features
 
 - **Cross-platform**: Works on Linux, macOS, and Windows
-- **Debian 12 with LXQT**: Lightweight desktop environment
+- **Debian 12 with XFCE**: Lightweight desktop environment
 - **Hardware acceleration**: Automatic KVM (Linux), HVF (macOS), or WHPX (Windows)
 - **Shared folders**: Easily share files between host and VM
 - **SSH access**: Connect via SSH on port 2222
@@ -150,7 +150,7 @@ ssh student@localhost -p 2222
 The first boot takes 5-10 minutes as cloud-init:
 
 1. Resizes the disk
-2. Installs LXQT desktop environment
+2. Installs XFCE desktop environment
 3. Installs development tools (Python, Node.js, Docker)
 4. Configures auto-login
 

@@ -6,7 +6,7 @@ import platform
 
 # VM Configuration
 VM_NAME = "student-vm"
-IMAGE_SIZE = "20G"  # Larger size for Debian with LXQT desktop
+IMAGE_SIZE = "20G"  # Larger size for Debian with XFCE desktop
 VM_MEMORY = "2048M"  # More memory for desktop environment
 VM_CPUS = 2
 

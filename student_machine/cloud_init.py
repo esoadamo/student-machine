@@ -1,10 +1,10 @@
-"""Cloud-init configuration for Debian with LXQT desktop."""
+"""Cloud-init configuration for Debian with XFCE desktop."""
 
 import time
 
 
 def get_user_data() -> str:
-    """Generate cloud-init user-data for Debian with LXQT desktop."""
+    """Generate cloud-init user-data for Debian with XFCE desktop."""
     return """#cloud-config
 hostname: student-vm
 fqdn: student-vm.local
@@ -35,16 +35,18 @@ packages:
   - vim
   - openssh-server
   
-  # LXQT Desktop Environment
-  - lxqt
-  - sddm
+  # XFCE Desktop Environment
+  - xfce4
+  - xfce4-goodies
+  - lightdm
+  - lightdm-gtk-greeter
   - xorg
   
   # Desktop applications
   - firefox-esr
-  - pcmanfm-qt
-  - qterminal
-  - featherpad
+  - thunar
+  - xfce4-terminal
+  - mousepad
   
   # Development tools
   - build-essential
@@ -65,112 +67,74 @@ growpart:
 
 # System configuration files
 write_files:
-  # Main SDDM config for autologin
-  # Note: Session must match filename in /usr/share/xsessions/ (without .desktop)
-  - path: /etc/sddm.conf
+  # LightDM autologin configuration
+  - path: /etc/lightdm/lightdm.conf
     content: |
-      [Autologin]
-      User=student
-      Session=lxqt
-      
-      [General]
-      HaltCommand=/usr/bin/systemctl poweroff
-      RebootCommand=/usr/bin/systemctl reboot
-      
-      [Users]
-      MaximumUid=60000
-      MinimumUid=1000
+      [Seat:*]
+      autologin-user=student
+      autologin-user-timeout=0
+      user-session=xfce
+      greeter-session=lightdm-gtk-greeter
     permissions: '0644'
   
-  # Script to fix autologin after LXQT is installed
-  # This runs after packages are installed to get the correct session name
+  # Script to fix autologin after XFCE is installed
   - path: /usr/local/bin/fix-autologin.sh
     permissions: '0755'
     content: |
       #!/bin/bash
-      # Find the actual LXQT session file name
-      SESSION=""
-      for f in /usr/share/xsessions/lxqt*.desktop; do
+      # Find the actual XFCE session file name
+      SESSION="xfce"
+      for f in /usr/share/xsessions/xfce*.desktop; do
         if [ -f "$f" ]; then
           SESSION=$(basename "$f" .desktop)
           break
         fi
       done
       
-      # Fallback to common names
-      if [ -z "$SESSION" ]; then
-        if [ -f /usr/share/xsessions/lxqt.desktop ]; then
-          SESSION="lxqt"
-        elif [ -f /usr/share/xsessions/LXQt.desktop ]; then
-          SESSION="LXQt"
-        else
-          SESSION="lxqt"
-        fi
-      fi
+      echo "Configuring LightDM autologin with session: $SESSION"
       
-      echo "Configuring SDDM autologin with session: $SESSION"
-      
-      # Create SDDM config
-      mkdir -p /etc/sddm.conf.d
-      cat > /etc/sddm.conf << EOF
-      [Autologin]
-      User=student
-      Session=$SESSION
-      
-      [General]
-      HaltCommand=/usr/bin/systemctl poweroff
-      RebootCommand=/usr/bin/systemctl reboot
-      
-      [Users]
-      MaximumUid=60000
-      MinimumUid=1000
+      # Create LightDM config
+      mkdir -p /etc/lightdm/lightdm.conf.d
+      cat > /etc/lightdm/lightdm.conf << EOF
+      [Seat:*]
+      autologin-user=student
+      autologin-user-timeout=0
+      user-session=$SESSION
+      greeter-session=lightdm-gtk-greeter
       EOF
       
-      # Also set in conf.d
-      cat > /etc/sddm.conf.d/autologin.conf << EOF
-      [Autologin]
-      User=student
-      Session=$SESSION
+      # Also in conf.d
+      cat > /etc/lightdm/lightdm.conf.d/autologin.conf << EOF
+      [Seat:*]
+      autologin-user=student
+      autologin-user-timeout=0
+      user-session=$SESSION
       EOF
       
-      # Enable autologin in PAM as well (some systems need this)
-      if [ -f /etc/pam.d/sddm-autologin ]; then
-        echo "PAM autologin already configured"
-      else
-        cat > /etc/pam.d/sddm-autologin << 'EOFPAM'
-      auth     requisite pam_nologin.so
-      auth     required  pam_succeed_if.so user ingroup nopasswdlogin quiet_success
-      auth     optional  pam_permit.so
-      account  include   sddm
-      password include   sddm
-      session  include   sddm
-      EOFPAM
-      fi
-      
-      # Create nopasswdlogin group and add student
-      groupadd -f nopasswdlogin
-      usermod -aG nopasswdlogin student
+      # Add student to autologin group
+      groupadd -f autologin
+      usermod -aG autologin student
       
       echo "Autologin configured for user 'student' with session '$SESSION'"
   
   # Desktop shortcut for terminal
-  - path: /home/student/Desktop/qterminal.desktop
+  - path: /home/student/Desktop/terminal.desktop
     content: |
       [Desktop Entry]
       Type=Application
       Name=Terminal
-      Exec=qterminal
+      Exec=xfce4-terminal
       Icon=utilities-terminal
       Terminal=false
     permissions: '0755'
   
   # Desktop shortcut for file manager
-  - path: /home/student/Desktop/pcmanfm-qt.desktop
+  - path: /home/student/Desktop/filemanager.desktop
     content: |
       [Desktop Entry]
       Type=Application
       Name=File Manager
-      Exec=pcmanfm-qt
+      Exec=thunar
       Icon=system-file-manager
       Terminal=false
     permissions: '0755'
@@ -217,7 +181,7 @@ write_files:
         echo "║  The system will REBOOT AUTOMATICALLY when ready.            ║"
         echo "║                                                               ║"
         echo "║  After reboot, you will be logged in automatically           ║"
-        echo "║  to the LXQT desktop environment.                            ║"
+        echo "║  to the XFCE desktop environment.                            ║"
         echo "║                                                               ║"
         echo "║  Credentials (if needed):                                    ║"
         echo "║    Username: student                                         ║"
@@ -257,14 +221,14 @@ write_files:
       echo ""
       echo "✓ Setup complete!"
       echo ""
-      echo "The system will now reboot into the LXQT desktop..."
+      echo "The system will now reboot into the XFCE desktop..."
       echo ""
       sleep 3
       
       # The reboot is handled by cloud-init power_state, but just in case:
       # reboot
 
-  # Console autologin config for after first boot (fallback if SDDM fails)
+  # Console autologin config for after first boot (fallback if LightDM fails)
   - path: /etc/systemd/system/getty@tty1.service.d/autologin.conf
     permissions: '0644'
     content: |
@@ -299,7 +263,7 @@ bootcmd:
         echo "║  The system will REBOOT AUTOMATICALLY when ready.            ║"
         echo "║                                                               ║"
         echo "║  After reboot, you will be logged in automatically           ║"
-        echo "║  to the LXQT desktop environment.                            ║"
+        echo "║  to the XFCE desktop environment.                            ║"
         echo "║                                                               ║"
         echo "║  Credentials (if needed):                                    ║"
         echo "║    Username: student                                         ║"
@@ -340,8 +304,8 @@ bootcmd:
 
 # Commands to run at first boot
 runcmd:
-  # Create SDDM config directory
-  - mkdir -p /etc/sddm.conf.d
+  # Create LightDM config directory
+  - mkdir -p /etc/lightdm/lightdm.conf.d
   
   # Set up student user
   - mkdir -p /home/student/Desktop
@@ -352,12 +316,14 @@ runcmd:
   
   # Enable and configure services
   - systemctl daemon-reload
-  - systemctl enable sddm
+  - systemctl enable lightdm
   - systemctl enable docker
   - systemctl enable mnt-shared.mount
   
-  # Add student to docker group
+  # Add student to docker and autologin groups
   - usermod -aG docker student
+  - groupadd -f autologin
+  - usermod -aG autologin student
   
   # Start shared folder mount (will fail if not available, that's ok)
   - systemctl start mnt-shared.mount || true
@@ -381,16 +347,16 @@ runcmd:
   # Create the autologin override directory
   - mkdir -p /etc/systemd/system/getty@tty1.service.d
   
-  # Reboot to start fresh with LXQT desktop and autologin
+  # Reboot to start fresh with XFCE desktop and autologin
   - echo "" > /dev/tty1 || true
-  - echo "First boot complete. Rebooting into LXQT desktop..." > /dev/tty1 || true
+  - echo "First boot complete. Rebooting into XFCE desktop..." > /dev/tty1 || true
   - sleep 2
   - reboot
 
 # Power state: reboot after cloud-init finishes (backup method)
 power_state:
   mode: reboot
-  message: "First boot setup complete. Rebooting into LXQT desktop..."
+  message: "First boot setup complete. Rebooting into XFCE desktop..."
   timeout: 30
   condition: true
 

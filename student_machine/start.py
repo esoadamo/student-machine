@@ -104,7 +104,7 @@ def start_vm(
     ])
     
     # Network with SSH and VNC port forwarding
-    # Port 22 -> SSH, Port 5900 -> VNC (for LXQT)
+    # Port 22 -> SSH, Port 5900 -> VNC (for XFCE)
     cmd.extend([
         "-nic", f"user,hostfwd=tcp:127.0.0.1:{port}-:22,hostfwd=tcp:127.0.0.1:5900-:5900"
     ])

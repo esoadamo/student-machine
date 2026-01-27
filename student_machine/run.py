@@ -21,7 +21,7 @@ def run_vm(
     This is the one-click mode for students - it will:
     1. Check if setup is needed and run it automatically
     2. Start the VM with graphical display
-    3. The VM will auto-login to LXQT desktop
+    3. The VM will auto-login to XFCE desktop
     
     Args:
         force_setup: If True, force recreation of VM images.
@@ -47,14 +47,22 @@ def run_vm(
     # Check if VM is already running
     is_running, pid = utils.is_vm_running()
     if is_running:
-        print(f"VM is already running (PID: {pid})")
-        print()
-        print("Access information:")
-        print(f"  SSH:      ssh student@localhost -p {port}")
-        print(f"  Password: student")
-        print()
-        print("To stop the VM: student-machine stop")
-        return True
+        if force_setup:
+            print(f"VM is running (PID: {pid}). Stopping it for forced recreation...")
+            from .stop import stop_vm
+            if not stop_vm(force=True):
+                print("Error: Failed to stop the running VM")
+                return False
+            print()
+        else:
+            print(f"VM is already running (PID: {pid})")
+            print()
+            print("Access information:")
+            print(f"  SSH:      ssh student@localhost -p {port}")
+            print(f"  Password: student")
+            print()
+            print("To stop the VM: student-machine stop")
+            return True
     
     # Check if setup is needed
     vm_image = config.get_image_path()
@@ -96,7 +104,7 @@ def run_vm(
         print("VM is starting!")
         print("=" * 60)
         print()
-        print("The LXQT desktop will appear in the QEMU window.")
+        print("The XFCE desktop will appear in the QEMU window.")
         print("Auto-login is enabled - no password needed.")
         print()
         print("First boot takes 5-10 minutes to install packages.")

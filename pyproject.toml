@@ -1,7 +1,7 @@
 [project]
 name = "student-machine"
 version = "0.1.0"
-description = "Cross-platform QEMU VM manager for students - provides a unified Debian LXQT virtual machine"
+description = "Cross-platform QEMU VM manager for students - provides a unified Debian XFCE virtual machine"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
