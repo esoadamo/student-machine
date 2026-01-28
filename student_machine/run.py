@@ -19,6 +19,7 @@ def run_vm(
     keyboard: str = "us",
     ssh: bool = False,
     vnc: bool = False,
+    from_url: Optional[str] = None,
 ) -> bool:
     """
     Auto-setup (if needed) and start the Student VM with GUI.
@@ -39,6 +40,7 @@ def run_vm(
         keyboard: Keyboard layout (e.g., 'us', 'cz').
         ssh: Enable SSH port forwarding (default: False).
         vnc: Enable VNC port forwarding (default: False).
+        from_url: Bootstrap VM from a backup URL (default: None).
     
     Returns:
         True if VM started successfully, False otherwise.
@@ -53,6 +55,21 @@ def run_vm(
         print("Error: QEMU is not installed or not in PATH.")
         print(utils.get_installation_instructions())
         return False
+    
+    # If --from-url is provided, restore from URL first
+    if from_url:
+        print("Bootstrapping VM from URL...")
+        print()
+        from .backup import restore_vm
+        
+        if not restore_vm(backup_url=from_url, name=name, force=force_setup):
+            print("Error: Failed to restore VM from URL")
+            return False
+        
+        print()
+        print("VM restored successfully from URL!")
+        print()
+        # Continue to start the VM
     
     # Check if VM is already running
     is_running, pid = utils.is_vm_running(name)
@@ -74,11 +91,11 @@ def run_vm(
             print("To stop the VM: student-machine stop")
             return True
     
-    # Check if setup is needed
+    # Check if setup is needed (skip if we restored from URL)
     vm_image = config.get_image_path(name)
     seed_image = config.get_seed_image_path(name)
     
-    needs_setup = force_setup or not vm_image.exists() or not seed_image.exists()
+    needs_setup = not from_url and (force_setup or not vm_image.exists() or not seed_image.exists())
     
     if needs_setup:
         print("VM not configured. Running setup...")
@@ -89,7 +106,7 @@ def run_vm(
             print("Error: Setup failed")
             return False
         print()
-    else:
+    elif not from_url:
         print("VM already configured.")
         print(f"  Image: {vm_image}")
         print()

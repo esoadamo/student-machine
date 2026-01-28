@@ -165,6 +165,11 @@ def main() -> int:
         help="Force recreation of VM images"
     )
     run_parser.add_argument(
+        "--from-url",
+        type=str,
+        help="Bootstrap VM from a backup URL"
+    )
+    run_parser.add_argument(
         "--shared-dir",
         type=str,
         help="Directory to share with VM (default: ~/.vm/data)"
@@ -262,7 +267,13 @@ def main() -> int:
     restore_parser.add_argument(
         "backup",
         type=str,
+        nargs="?",
         help="Path to backup archive"
+    )
+    restore_parser.add_argument(
+        "--from-url",
+        type=str,
+        help="URL to download backup from"
     )
     restore_parser.add_argument(
         "--name", "-n",
@@ -388,6 +399,7 @@ def main() -> int:
             keyboard=args.keyboard,
             ssh=args.ssh,
             vnc=args.vnc,
+            from_url=args.from_url,
         )
         return 0 if success else 1
     
@@ -483,8 +495,16 @@ def main() -> int:
     elif args.command == "restore":
         from .backup import restore_vm
         from pathlib import Path
+        
+        # Check if we have either backup path or URL
+        if not args.backup and not args.from_url:
+            print("Error: Either provide a backup path or use --from-url")
+            return 1
+        
+        backup_path = Path(args.backup) if args.backup else None
         success = restore_vm(
-            backup_path=Path(args.backup),
+            backup_path=backup_path,
+            backup_url=args.from_url,
             name=args.name,
             force=args.force,
         )

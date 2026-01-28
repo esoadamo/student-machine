@@ -130,15 +130,17 @@ def backup_vm(
 
 
 def restore_vm(
-    backup_path: Path,
+    backup_path: Optional[Path] = None,
+    backup_url: Optional[str] = None,
     name: Optional[str] = None,
     force: bool = False,
 ) -> bool:
     """
-    Restore a VM from a backup archive.
+    Restore a VM from a backup archive (local file or URL).
     
     Args:
-        backup_path: Path to the backup archive
+        backup_path: Path to the backup archive (local file)
+        backup_url: URL to download backup archive from
         name: Name for the restored VM (default: original name from backup)
         force: Overwrite existing VM if it exists
     
@@ -149,6 +151,25 @@ def restore_vm(
     
     print("=== Restoring VM ===")
     print()
+    
+    # Handle URL download
+    if backup_url:
+        print(f"Downloading backup from URL: {backup_url}")
+        # Download to temporary file
+        import tempfile
+        temp_dir = Path(tempfile.mkdtemp())
+        temp_file = temp_dir / "backup.tar.gz"
+        
+        if not utils.download_file(backup_url, temp_file):
+            print("Error: Failed to download backup from URL")
+            return False
+        
+        backup_path = temp_file
+        print()
+    
+    if not backup_path:
+        print("Error: Either backup_path or backup_url must be provided")
+        return False
     
     if not backup_path.exists():
         print(f"Error: Backup file not found: {backup_path}")
