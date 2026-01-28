@@ -103,6 +103,11 @@ def download_file(url: str, dest: Path, show_progress: bool = True) -> bool:
                 if downloaded >= total_size:
                     print()
         
+        # Create opener with custom user agent
+        opener = urllib.request.build_opener()
+        opener.addheaders = [("User-Agent", "student-machine/0.1.0")]
+        urllib.request.install_opener(opener)
+        
         urllib.request.urlretrieve(
             url, 
             dest, 

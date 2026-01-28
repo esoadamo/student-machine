@@ -70,6 +70,12 @@ def backup_vm(
         files_to_backup.append(("seed.iso", seed_image))
         print(f"  Seed Image: {seed_image} ({seed_image.stat().st_size / 1024:.1f} KB)")
     
+    # Include base image if it exists (shared across all VMs)
+    base_image = config.get_base_image_path()
+    if base_image.exists():
+        files_to_backup.append(("debian-12-base.qcow2", base_image))
+        print(f"  Base Image: {base_image} ({base_image.stat().st_size / (1024*1024):.1f} MB)")
+    
     # Include data directory if it exists and has content
     if data_dir.exists() and any(data_dir.iterdir()):
         print(f"  Data Dir:   {data_dir}")
@@ -261,6 +267,19 @@ def restore_vm(
                     if src:
                         with open(dest, "wb") as dst:
                             dst.write(src.read())
+                        src.close()
+                
+                elif member.name == "debian-12-base.qcow2":
+                    # Restore base image to shared location (not VM-specific)
+                    dest = config.get_base_image_path()
+                    # Create parent directory if needed
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    print(f"  Extracting: {member.name} -> {dest}")
+                    src = tar.extractfile(member)
+                    if src:
+                        with open(dest, "wb") as dst:
+                            while chunk := src.read(1024 * 1024):
+                                dst.write(chunk)
                         src.close()
                 
                 elif member.name.startswith("data/"):
