@@ -12,29 +12,99 @@ from . import utils
 
 def get_host_memory_mb() -> int:
     """Get total host memory in MB."""
-    try:
-        with open("/proc/meminfo", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("MemTotal:"):
-                    # Value is in kB
-                    kb = int(line.split()[1])
-                    return kb // 1024
-    except:
-        pass
+    system = config.get_system()
+    
+    if system == "linux":
+        try:
+            with open("/proc/meminfo", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("MemTotal:"):
+                        # Value is in kB
+                        kb = int(line.split()[1])
+                        return kb // 1024
+        except:
+            pass
+    elif system == "windows":
+        try:
+            import ctypes
+            # Windows-specific memory detection
+            kernel32 = ctypes.windll.kernel32  # type: ignore
+            c_ulonglong = ctypes.c_ulonglong
+            kernel32.GetPhysicallyInstalledSystemMemory.restype = ctypes.c_bool
+            total_memory = c_ulonglong(0)
+            if kernel32.GetPhysicallyInstalledSystemMemory(ctypes.byref(total_memory)):  # type: ignore
+                return total_memory.value // 1024
+        except:
+            pass
+    elif system == "macos":
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            bytes_val = int(result.stdout.strip())
+            return bytes_val // (1024 * 1024)
+        except:
+            pass
+    
     # Default fallback
     return 8192
 
 
 def get_host_available_memory_mb() -> int:
     """Get available host memory in MB."""
-    try:
-        with open("/proc/meminfo", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("MemAvailable:"):
-                    kb = int(line.split()[1])
-                    return kb // 1024
-    except:
-        pass
+    system = config.get_system()
+    
+    if system == "linux":
+        try:
+            with open("/proc/meminfo", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        kb = int(line.split()[1])
+                        return kb // 1024
+        except:
+            pass
+    elif system == "windows":
+        try:
+            import ctypes
+            class MemoryStatus(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                ]
+            
+            mem_status = MemoryStatus()
+            mem_status.dwLength = ctypes.sizeof(MemoryStatus)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem_status))  # type: ignore
+            return mem_status.ullAvailPhys // (1024 * 1024)
+        except:
+            pass
+    elif system == "macos":
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["vm_stat"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # vm_stat reports in 4KB pages; find "Pages free:" line
+            for line in result.stdout.split("\n"):
+                if "Pages free:" in line:
+                    pages_free = int(line.split(":")[1].strip().rstrip("."))
+                    return (pages_free * 4096) // (1024 * 1024)
+        except:
+            pass
+    
     return 4096
 
 
@@ -184,9 +254,14 @@ def start_vm(
             # On Windows, use a different approach
             cmd.extend(["-serial", "stdio"])
     
-    # QMP Monitor socket (for graceful shutdown)
+    # QMP Monitor socket (for graceful shutdown and balloon control)
     monitor_sock = config.get_monitor_socket(name)
-    if system != "windows":
+    monitor_port = config.get_monitor_port(name)
+    if system == "windows":
+        # On Windows, use TCP socket for QMP (Unix sockets don't work)
+        cmd.extend(["-qmp", f"tcp:127.0.0.1:{monitor_port},server,nowait"])
+    else:
+        # On Linux/macOS, use Unix domain socket
         cmd.extend(["-qmp", f"unix:{monitor_sock},server,nowait"])
     
     # PID file
@@ -221,11 +296,12 @@ def start_vm(
             return
         with open(log_file, "a", encoding="utf-8") as log:
             if system == "windows":
+                # Use CREATE_NEW_PROCESS_GROUP on Windows for proper process management
                 subprocess.Popen(
                     command,
                     stdout=log,
                     stderr=log,
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                    creationflags=0x00000200  # CREATE_NEW_PROCESS_GROUP constant
                 )
             else:
                 subprocess.Popen(

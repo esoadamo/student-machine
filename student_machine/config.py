@@ -56,6 +56,14 @@ def get_monitor_socket(name: str = DEFAULT_VM_NAME) -> Path:
     return get_vm_subdir(name) / f"{name}-monitor.sock"
 
 
+def get_monitor_port(name: str = DEFAULT_VM_NAME) -> int:
+    """Get the QMP monitor TCP port for Windows/cross-platform usage."""
+    # Use a port based on VM name hash to avoid collisions
+    # Range: 12000-12999 (1000 available ports for VMs)
+    port = 12000 + (hash(name) % 1000)
+    return abs(port)  # Ensure positive port number
+
+
 def get_console_socket(name: str = DEFAULT_VM_NAME) -> Path:
     """Get the serial console socket path."""
     return get_vm_subdir(name) / f"{name}-console.sock"
