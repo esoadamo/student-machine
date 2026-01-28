@@ -301,6 +301,8 @@ def install_windows() -> bool:
             return False
         new_path = ";".join(current_entries + to_add)
         subprocess.run(["setx", "PATH", new_path], check=True)
+        # Also update the current process PATH to propagate the change immediately
+        os.environ["PATH"] = new_path
         return True
 
     qemu_in_path = is_qemu_installed()

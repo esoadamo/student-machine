@@ -266,15 +266,12 @@ def start_vm(
         # Windows WHPX fallback to TCG
         if system == "windows" and "-accel" in cmd:
             try:
+                # Wait a few seconds before checking logs in case of delayed crash
+                time.sleep(3)
                 log_text = ""
                 if log_file.exists():
                     log_text = log_file.read_text(encoding="utf-8", errors="ignore")
-                whpx_errors = [
-                    "failed to initialize whpx",
-                    "whpx: no accelerator found",
-                    "whpx: no space left on device",
-                ]
-                if any(err in log_text.lower() for err in whpx_errors):
+                if "whpx" in log_text.lower():
                     cmd_fallback = cmd.copy()
                     accel_index = cmd_fallback.index("-accel")
                     if accel_index + 1 < len(cmd_fallback):
