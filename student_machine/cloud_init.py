@@ -96,8 +96,6 @@ packages:
   - docker.io
   - docker-compose
   
-  # Flatpak
-  - flatpak
 
 # Grow root partition to use full disk
 growpart:
@@ -511,9 +509,12 @@ runcmd:
     apt-get update
     apt-get install -y code
   
-  # Install VSCodium via Flatpak
-  - flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-  - flatpak install -y flathub com.vscodium.codium
+  # Install VSCodium via custom APT repo
+  - |
+    wget -O - https://deb.adamhlavacek.com/pub.gpg | gpg --dearmour -o /etc/apt/trusted.gpg.d/deb-adamhlavacek-com.gpg
+    echo "deb https://deb.adamhlavacek.com ./" | tee -a /etc/apt/sources.list
+    apt-get update
+    apt-get install -y codium
   
   # Install uv (Python package manager)
   - curl -LsSf https://astral.sh/uv/install.sh | sh
