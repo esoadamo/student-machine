@@ -92,6 +92,16 @@ def main() -> int:
         type=int,
         help="Number of CPUs (default: 2)"
     )
+    start_parser.add_argument(
+        "--ssh",
+        action="store_true",
+        help="Enable SSH port forwarding"
+    )
+    start_parser.add_argument(
+        "--vnc",
+        action="store_true",
+        help="Enable VNC port forwarding"
+    )
     
     # Stop command
     stop_parser = subparsers.add_parser(
@@ -186,6 +196,16 @@ def main() -> int:
         type=str,
         default="us",
         help="Keyboard layout (default: us, e.g., cz for Czech)"
+    )
+    run_parser.add_argument(
+        "--ssh",
+        action="store_true",
+        help="Enable SSH port forwarding"
+    )
+    run_parser.add_argument(
+        "--vnc",
+        action="store_true",
+        help="Enable VNC port forwarding"
     )
     
     # Balloon command (memory management)
@@ -300,6 +320,8 @@ def main() -> int:
             port=args.port,
             memory=args.memory,
             cpus=args.cpus,
+            ssh=args.ssh,
+            vnc=args.vnc,
         )
         return 0 if success else 1
     
@@ -364,6 +386,8 @@ def main() -> int:
             cpus=args.cpus,
             locale=args.locale,
             keyboard=args.keyboard,
+            ssh=args.ssh,
+            vnc=args.vnc,
         )
         return 0 if success else 1
     

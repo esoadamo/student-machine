@@ -17,6 +17,8 @@ def run_vm(
     cpus: Optional[int] = None,
     locale: str = "en_US.UTF-8",
     keyboard: str = "us",
+    ssh: bool = False,
+    vnc: bool = False,
 ) -> bool:
     """
     Auto-setup (if needed) and start the Student VM with GUI.
@@ -35,6 +37,8 @@ def run_vm(
         cpus: Number of CPUs (default from config).
         locale: System locale (e.g., 'en_US.UTF-8', 'cs_CZ.UTF-8').
         keyboard: Keyboard layout (e.g., 'us', 'cz').
+        ssh: Enable SSH port forwarding (default: False).
+        vnc: Enable VNC port forwarding (default: False).
     
     Returns:
         True if VM started successfully, False otherwise.
@@ -107,6 +111,8 @@ def run_vm(
         port=port,
         memory=memory,
         cpus=cpus,
+        ssh=ssh,
+        vnc=vnc,
     )
     
     if success:

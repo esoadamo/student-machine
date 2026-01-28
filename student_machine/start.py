@@ -116,6 +116,8 @@ def start_vm(
     port: int = 2222,
     memory: Optional[str] = None,
     cpus: Optional[int] = None,
+    ssh: bool = False,
+    vnc: bool = False,
 ) -> bool:
     """
     Start the Student VM.
@@ -128,6 +130,8 @@ def start_vm(
         port: SSH port forwarding (default: 2222).
         memory: Memory allocation (default from config).
         cpus: Number of CPUs (default from config).
+        ssh: If True, enable SSH port forwarding (default: False).
+        vnc: If True, enable VNC port forwarding (default: False).
     
     Returns:
         True if VM started successfully, False otherwise.
@@ -219,11 +223,20 @@ def start_vm(
         "-drive", f"file={seed_image},format=raw,if=virtio",
     ])
     
-    # Network with SSH and VNC port forwarding
-    # Port 22 -> SSH, Port 5900 -> VNC (for XFCE)
-    cmd.extend([
-        "-nic", f"user,hostfwd=tcp:127.0.0.1:{port}-:22,hostfwd=tcp:127.0.0.1:5900-:5900"
-    ])
+    # Network with optional SSH and VNC port forwarding
+    # Build port forwarding configuration
+    hostfwd_parts = []
+    if ssh:
+        hostfwd_parts.append(f"hostfwd=tcp:127.0.0.1:{port}-:22")
+    if vnc:
+        hostfwd_parts.append(f"hostfwd=tcp:127.0.0.1:5900-:5900")
+    
+    if hostfwd_parts:
+        nic_config = f"user,{','.join(hostfwd_parts)}"
+    else:
+        nic_config = "user"
+    
+    cmd.extend(["-nic", nic_config])
     
     # Shared folder (9p virtfs - works on Linux and macOS with proper QEMU build)
     if system in ("linux", "macos"):
@@ -324,8 +337,11 @@ def start_vm(
             print(f"✓ VM started with PID: {pid}")
             print()
             print("Access information:")
-            print(f"  SSH:          ssh student@localhost -p {port}")
-            print(f"  Password:     student")
+            if ssh:
+                print(f"  SSH:          ssh student@localhost -p {port}")
+                print(f"  Password:     student")
+            if vnc:
+                print(f"  VNC:          vnc://localhost:5900")
             print(f"  Shared Dir:   {shared_dir}")
             print(f"  Guest Mount:  /mnt/shared")
             print()
@@ -360,8 +376,11 @@ def start_vm(
                             print(f"✓ VM started with PID: {pid}")
                             print()
                             print("Access information:")
-                            print(f"  SSH:          ssh student@localhost -p {port}")
-                            print(f"  Password:     student")
+                            if ssh:
+                                print(f"  SSH:          ssh student@localhost -p {port}")
+                                print(f"  Password:     student")
+                            if vnc:
+                                print(f"  VNC:          vnc://localhost:5900")
                             print(f"  Shared Dir:   {shared_dir}")
                             print(f"  Guest Mount:  /mnt/shared")
                             print()
