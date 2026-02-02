@@ -106,8 +106,9 @@ def backup_vm(
             with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
                 tmp.write(metadata_json)
                 tmp.flush()
-                tar.add(tmp.name, arcname="metadata.json")
-                Path(tmp.name).unlink()
+                tmp_name = tmp.name
+            tar.add(tmp_name, arcname="metadata.json")
+            Path(tmp_name).unlink()
             
             # Add VM files
             for arcname, filepath in files_to_backup:
@@ -298,6 +299,45 @@ def restore_vm(
                                 with open(dest, "wb") as dst:
                                     dst.write(src.read())
                                 src.close()
+
+            # Fix qcow2 backing file path if needed (portability across systems)
+            base_image = config.get_base_image_path()
+            if vm_image.exists() and base_image.exists():
+                if utils.check_qemu_img_installed():
+                    try:
+                        info = utils.run_command(
+                            ["qemu-img", "info", "--output=json", str(vm_image)],
+                            capture_output=True,
+                        )
+                        backing_file = None
+                        if info.stdout:
+                            backing_file = json.loads(info.stdout).get("backing-filename")
+
+                        if backing_file:
+                            backing_path = Path(backing_file)
+                            if backing_path.is_absolute():
+                                current_backing = backing_path
+                            else:
+                                current_backing = (vm_image.parent / backing_path).resolve()
+
+                            if current_backing.resolve() != base_image.resolve():
+                                print("Updating qcow2 backing file to local base image...")
+                                utils.run_command(
+                                    [
+                                        "qemu-img",
+                                        "rebase",
+                                        "-u",
+                                        "-F",
+                                        "qcow2",
+                                        "-b",
+                                        str(base_image),
+                                        str(vm_image),
+                                    ]
+                                )
+                    except Exception as e:
+                        print(f"Warning: Failed to rebase VM image backing file: {e}")
+                else:
+                    print("Warning: qemu-img not found; unable to fix backing file path.")
             
             print()
             print(f"✓ VM '{vm_name}' restored successfully!")
