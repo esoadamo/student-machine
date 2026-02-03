@@ -28,32 +28,46 @@ class QMPClient:
     
     def connect(self) -> bool:
         """Connect to QMP socket (Unix or TCP)."""
-        try:
-            if self.is_tcp:
-                # TCP connection (for Windows and cross-platform)
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.connect((self.host, self.port))
-                self.sock.settimeout(5.0)
-            else:
-                # Unix domain socket (for Linux/macOS)
-                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                self.sock.connect(str(self.socket_path))
-                self.sock.settimeout(5.0)
-            
-            # Read greeting
-            self._recv()
-            
-            # Send qmp_capabilities to enter command mode
-            self._send({"execute": "qmp_capabilities"})
-            response = self._recv()
-            
-            return "return" in response
-        except Exception as e:
-            if self.is_tcp:
-                print(f"QMP connection error (TCP {self.host}:{self.port}): {e}")
-            else:
-                print(f"QMP connection error (Unix socket {self.socket_path}): {e}")
-            return False
+        retries = 10
+        delay = 0.5
+        last_error: Optional[Exception] = None
+        
+        for attempt in range(1, retries + 1):
+            try:
+                if self.is_tcp:
+                    # TCP connection (for Windows and cross-platform)
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.sock.settimeout(5.0)
+                    self.sock.connect((self.host, self.port))
+                else:
+                    # Unix domain socket (for Linux/macOS)
+                    self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    self.sock.settimeout(5.0)
+                    self.sock.connect(str(self.socket_path))
+                
+                # Read greeting
+                self._recv()
+                
+                # Send qmp_capabilities to enter command mode
+                self._send({"execute": "qmp_capabilities"})
+                response = self._recv()
+                
+                return "return" in response
+            except Exception as e:
+                last_error = e
+                if self.sock:
+                    try:
+                        self.sock.close()
+                    except Exception:
+                        pass
+                    self.sock = None
+                time.sleep(delay)
+        
+        if self.is_tcp:
+            print(f"QMP connection error (TCP {self.host}:{self.port}): {last_error}")
+        else:
+            print(f"QMP connection error (Unix socket {self.socket_path}): {last_error}")
+        return False
     
     def disconnect(self):
         """Disconnect from QMP socket."""

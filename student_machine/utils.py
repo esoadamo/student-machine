@@ -225,15 +225,22 @@ def kill_process(pid: int, force: bool = False) -> bool:
 
 def send_qmp_command(command: dict, name: str = config.DEFAULT_VM_NAME) -> Optional[dict]:
     """Send a QMP command to the VM monitor socket."""
+    system = config.get_system()
     monitor_sock = config.get_monitor_socket(name)
+    monitor_port = config.get_monitor_port(name)
     
-    if not monitor_sock.exists():
+    if system != "windows" and not monitor_sock.exists():
         return None
     
     try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        sock.connect(str(monitor_sock))
+        if system == "windows":
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect(("127.0.0.1", monitor_port))
+        else:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect(str(monitor_sock))
         
         # Read greeting
         sock.recv(4096)

@@ -412,13 +412,20 @@ def main() -> int:
         from pathlib import Path
         import os
         
+        system = config.get_system()
         qmp_socket = config.get_monitor_socket(args.name)
         shared_dir = Path(args.shared_dir) if args.shared_dir else config.get_data_dir(args.name)
+        qmp_host = None
+        qmp_port = None
         
-        if not qmp_socket.exists():
-            print(f"Error: VM '{args.name}' is not running (QMP socket not found)")
-            print("Start the VM first with: student-machine start")
-            return 1
+        if system == "windows":
+            qmp_host = "127.0.0.1"
+            qmp_port = config.get_monitor_port(args.name)
+        else:
+            if not qmp_socket.exists():
+                print(f"Error: VM '{args.name}' is not running (QMP socket not found)")
+                print("Start the VM first with: student-machine start")
+                return 1
         
         # Check if balloon is already running
         running, existing_pid = is_balloon_running(args.name)
@@ -435,6 +442,10 @@ def main() -> int:
             max_memory = get_host_memory_mb() - 1024
         
         # Run in background unless --foreground is specified
+        if system == "windows" and not args.foreground:
+            print("Background balloon controller is not supported on Windows. Running in foreground.")
+            args.foreground = True
+
         if not args.foreground:
             # Fork to background
             pid = os.fork()
@@ -468,6 +479,8 @@ def main() -> int:
         
         controller = MemoryBalloonController(
             qmp_socket=qmp_socket,
+            qmp_host=qmp_host,
+            qmp_port=qmp_port,
             shared_dir=shared_dir,
             min_memory_mb=args.min_memory,
             max_memory_mb=max_memory,
